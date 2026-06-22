@@ -12,6 +12,7 @@ import docx
 import docx.oxml
 import docx.shared
 import docx.styles.style
+from docx.enum.style import WD_STYLE_TYPE
 
 import constants
 from text import Text
@@ -25,6 +26,7 @@ class Compiler:
         assert isinstance(main, Text)
         self.main = main
         self.tx = utils.Tx(self.main.language)
+
         self.doc = docx.Document()
 
         # Set the default document-wide language.
@@ -36,6 +38,7 @@ class Compiler:
             lang_default.set(docx.oxml.shared.qn("w:val"), self.main.language)
 
         # Set to A4 page size.
+        # XXX Make configurable.
         section = self.doc.sections[0]
         section.page_height = docx.shared.Mm(297)
         section.page_width = docx.shared.Mm(210)
@@ -46,15 +49,27 @@ class Compiler:
         section.header_distance = docx.shared.Mm(12.7)
         section.footer_distance = docx.shared.Mm(12.7)
 
-        # Modify styles.
-        style = self.doc.styles["Title"]
+        # Create or modify styles to be used in the document.
+        style = self.doc.styles.add_style("Title 0", WD_STYLE_TYPE.PARAGRAPH)
+        style.base_style = self.doc.styles["Title"]
+        style.font.name = constants.DOCX_NORMAL_FONT
+        style.font.size = docx.shared.Pt(constants.DOCX_FONT_SIZES[0])
         style.font.color.rgb = docx.shared.RGBColor(0, 0, 0)
 
         for level in range(1, constants.MAX_LEVEL + 1):
-            style = self.doc.styles[f"Heading {level}"]
-            style.paragraph_format.space_after = docx.shared.Pt(
-                2 * (constants.MAX_LEVEL + 1 - level)
+            style = self.doc.styles.add_style(f"Title {level}", WD_STYLE_TYPE.PARAGRAPH)
+            style.base_style = self.doc.styles[f"Heading {level}"]
+            style.font.name = constants.DOCX_NORMAL_FONT
+            style.font.size = docx.shared.Pt(constants.DOCX_FONT_SIZES[level])
+            style.font.bold = True
+            style.font.italic = False
+            style.paragraph_format.space_before = docx.shared.Pt(
+                5 * (constants.MAX_LEVEL + 1 - level)
             )
+            style.paragraph_format.space_after = docx.shared.Pt(
+                3 * (constants.MAX_LEVEL + 1 - level)
+            )
+            style.paragraph_format.line_spacing = 1
             style.font.color.rgb = docx.shared.RGBColor(0, 0, 0)
 
         style = self.doc.styles["Normal"]
@@ -64,7 +79,7 @@ class Compiler:
             constants.DOCX_NORMAL_LINE_SPACING
         )
 
-        # "Body Text": TOC entries and for index pages.
+        # "Body Text": Table-of-contents (TOC) entries and index pages.
         style = self.doc.styles["Body Text"]
         style.paragraph_format.space_before = docx.shared.Pt(
             constants.DOCX_TOC_SPACE_BEFORE
@@ -73,32 +88,13 @@ class Compiler:
             constants.DOCX_TOC_SPACE_AFTER
         )
 
-        # "Body Text 2": synopsis.
-        style = self.doc.styles["Body Text 2"]
-        style.font.italic = True
-        style.paragraph_format.space_before = docx.shared.Pt(
-            constants.DOCX_SYNOPSIS_SPACE_BEFORE
-        )
-        style.paragraph_format.space_after = docx.shared.Pt(
-            constants.DOCX_SYNOPSIS_SPACE_AFTER
-        )
-        style.paragraph_format.line_spacing = docx.shared.Pt(
-            constants.DOCX_SYNOPSIS_LINE_SPACING
-        )
-        style.paragraph_format.left_indent = docx.shared.Pt(
-            constants.DOCX_SYNOPSIS_INDENT
-        )
-        style.paragraph_format.right_indent = docx.shared.Pt(
-            constants.DOCX_SYNOPSIS_INDENT
-        )
-
         style = self.doc.styles["Quote"]
         style.paragraph_format.left_indent = docx.shared.Pt(constants.DOCX_QUOTE_INDENT)
         style.paragraph_format.right_indent = docx.shared.Pt(
             constants.DOCX_QUOTE_INDENT
         )
 
-        style = self.doc.styles["macro"]
+        style = self.doc.styles.add_style("Code", WD_STYLE_TYPE.PARAGRAPH)
         style.font.name = constants.DOCX_CODE_FONT
         style.font.size = docx.shared.Pt(constants.DOCX_CODE_FONT_SIZE)
         style.paragraph_format.line_spacing = docx.shared.Pt(
@@ -129,6 +125,11 @@ class Compiler:
         run._r.append(instrText)
         run._r.append(fldChar2)
 
+    def print(self, msg):
+        print(msg)
+
+    def write(self, filename=None):
+        "Convert the main text and its subtexts, if any, into DOCX."
         # Key: fulltitle; value: dict(label, ast_children)
         self.footnotes = {}
         # Actually referenced. Key: refid; value: reference
@@ -136,24 +137,22 @@ class Compiler:
         # Key: canonical; value: dict(id, fulltitle, ordinal)
         self.indexed = {}
 
-    def write(self, filename=None):
-        "Compile the main text and its sections, if any, and write out."
-        paragraph = self.doc.add_paragraph(style="Title")
+        paragraph = self.doc.add_paragraph(style="Title 0")
         run = paragraph.add_run(self.main.title)
 
         if self.main.subtitle:
-            paragraph = self.doc.add_paragraph(style="Heading 1")
+            paragraph = self.doc.add_paragraph(style="Title 1")
             paragraph.add_run(self.main.subtitle)
 
         # Split authors into runs to allow line break between them.
-        paragraph = self.doc.add_paragraph(style="Heading 2")
+        paragraph = self.doc.add_paragraph(style="Title 2")
         for author in self.main.authors:
             paragraph.add_run(author)
             if author != self.main.authors[-1]:
-                paragraph.add_run(", ")
+                paragraph.add_
 
-        renderer = Renderer(self)
-        renderer(self.main.ast())
+        # Title-page text; synopsis, or similar.
+        Renderer(self)(self.main.ast)
 
         if self.main.title_page_metadata:
             paragraph = self.doc.add_paragraph()
@@ -169,64 +168,84 @@ class Compiler:
             )
             run.font.italic = True
 
+        # Write table of contents (TOC) page(s).
+        # The DOCX format does not allow determining the page numbers before printing.
+        if self.main.toc_level:
+            self.doc.add_page_break()
+            self.write_heading(self.tx("Contents"), 1)
+            for text in self.main.all_texts()[1:]: # Skip the main file; title page.
+                if text.level > self.main.toc_level:
+                    continue
+                paragraph = self.doc.add_paragraph(style="Body Text")
+                paragraph.paragraph_format.left_indent = docx.shared.Pt(
+                    constants.DOCX_TOC_INDENT * text.level
+                )
+                paragraph.paragraph_format.first_line_indent = -docx.shared.Pt(
+                    constants.DOCX_TOC_INDENT
+                )
+                paragraph.add_run(text.title)
+
+            # At this stage it is not known if any references or indexed.
+            # XXX WRONG; Can be checked.
+            self.doc.add_paragraph(self.tx("References"), style="Body Text")
+            self.doc.add_paragraph(self.tx("Index"), style="Body Text")
+
+        # First-level subtexts are chapters.
+        for text in self.main.subtexts:
+            self.write_text(text)
+
+            if self.footnotes_location == constants.FOOTNOTES_CHAPTER:
+                self.write_chapter_footnotes(text)
+
+        if self.footnotes_location == constants.FOOTNOTES_BOOK:
+            self.write_book_footnotes()
+
+        # References pages written, even if empty, since TOC pages contains item.
+        if self.toc_level or self.referenced:
+            self.write_references()
+
+        # Indexed pages written, even if empty, since TOC pages contains item.
+        if self.toc_level or self.indexed:
+            self.write_indexed()
+
         filename = filename or self.main.filename.with_suffix(".docx")
         self.doc.save(filename)
 
-    # def write_section(self, section, level, skip_page_break=False):
-    #     if section.status == constants.OMITTED:
-    #         return
-    #     if level <= self.page_break_level and not skip_page_break:
-    #         self.doc.add_page_break()
-    #     self.write_heading(section.heading, level)
-    #     if section.subtitle:
-    #         self.write_heading(section.subtitle, level + 1)
-    #     if section.synopsis:
-    #         paragraph = self.doc.add_paragraph(style="Body Text 2")
-    #         paragraph.add_run(section.synopsis)
+    def write_text(self, text):
+        if text.level <= self.main.page_break_level:
+            self.doc.add_page_break()
+        self.write_heading(text.title, text.level)
+        if text.subtitle:
+            self.write_heading(text.subtitle, text.level + 1)
+        self.current_text = text
 
-    #     self.current_text = section
-    #     self.render_initialize()
-    #     self.render(section.ast())
-    #     if self.footnotes_location == constants.FOOTNOTES_EACH_TEXT:
-    #         self.write_text_footnotes(section)
-    #     for item in section.items:
-    #         if item.is_section:
-    #             self.write_section(item, level=level + 1)
-    #         else:
-    #             self.write_text(item, level=level + 1)
+        Renderer(self)(text.ast)
 
-    # def write_text(self, text, level, skip_page_break=False):
-    #     if text.status == constants.OMITTED:
-    #         return
-    #     if level <= self.page_break_level and not skip_page_break:
-    #         self.doc.add_page_break()
-    #     if not text.frontmatter.get("suppress_title"):
-    #         self.write_heading(text.heading, level)
-    #         if text.subtitle:
-    #             self.write_heading(text.subtitle, level + 1)
-    #     if text.synopsis:
-    #         paragraph = self.doc.add_paragraph(style="Body Text 2")
-    #         paragraph.add_run(text.synopsis)
-    #     self.current_text = text
-    #     self.render_initialize()
-    #     self.render(text.ast())
-    #     if self.footnotes_location == constants.FOOTNOTES_EACH_TEXT:
-    #         self.write_text_footnotes(text)
+        if self.footnotes_location == constants.FOOTNOTES_TEXT:
+            self.write_text_footnotes(text)
+
+        for subtext in text.subtexts:
+            self.write_text(subtext)
 
     def write_heading(self, heading, level):
-        level = min(level, constants.MAX_LEVEL)
-        paragraph = self.doc.add_paragraph(style=f"Heading {level}")
-        paragraph.add_run(heading)
+        if level <= constants.MAX_LEVEL:
+            paragraph = self.doc.add_paragraph(style=f"Title {level}")
+            paragraph.add_run(heading)
+        else:
+            paragraph = self.doc.add_paragraph()
+            run = paragraph.add_run(heading)
+            run.font.italic = True
 
-    # def write_text_footnotes(self, text):
-    #     "Footnotes at end of the text."
-    #     assert self.footnotes_location == constants.FOOTNOTES_EACH_TEXT
+    def write_text_footnotes(self, text):
+        "Footnotes at end of the text."
+        pass
+    #     assert self.footnotes_location == constants.FOOTNOTES_TEXT
     #     try:
     #         footnotes = self.footnotes[text.fulltitle]
     #     except KeyError:
     #         return
     #     paragraph = self.doc.add_heading(
-    #         Tx("Footnotes"), max(3, constants.MAX_LEVEL - 1)
+    #         self.tx("Footnotes"), max(3, constants.MAX_LEVEL - 1)
     #     )
     #     for entry in sorted(footnotes.values(), key=lambda e: e["number"]):
     #         self.footnote_def_flag = entry["number"]
@@ -234,26 +253,28 @@ class Compiler:
     #             self.render(child)
     #         self.footnote_def_flag = 0
 
-    # def write_chapter_footnotes(self, item):
-    #     "Footnote definitions at the end of a chapter."
-    #     self.footnotes_location == constants.FOOTNOTES_EACH_CHAPTER
+    def write_chapter_footnotes(self, item):
+        "Footnote definitions at the end of a chapter."
+        pass
+    #     assert self.footnotes_location == constants.FOOTNOTES_CHAPTER
     #     try:
     #         footnotes = self.footnotes[item.chapter.fulltitle]
     #     except KeyError:
     #         return
     #     self.doc.add_page_break()
-    #     self.write_heading(Tx("Footnotes"), 3)
+    #     self.write_heading(self.tx("Footnotes"), 3)
     #     for entry in sorted(footnotes.values(), key=lambda e: e["number"]):
     #         self.footnote_def_flag = entry["number"]
     #         for child in entry["ast_children"]:
     #             self.render(child)
     #         self.footnote_def_flag = 0
 
-    # def write_book_footnotes(self):
-    #     "Footnote definitions as a separate section at the end of the book."
-    #     assert self.footnotes_location == constants.FOOTNOTES_END_OF_BOOK
+    def write_book_footnotes(self):
+        "Footnote definitions as a separate section at the end of the book."
+        pass
+    #     assert self.footnotes_location == constants.FOOTNOTES_BOOK
     #     self.doc.add_page_break()
-    #     self.write_heading(Tx("Footnotes"), 1)
+    #     self.write_heading(self.tx("Footnotes"), 1)
     #     for item in self.main.items:
     #         footnotes = self.footnotes.get(item.fulltitle, {})
     #         if not footnotes:
@@ -265,139 +286,139 @@ class Compiler:
     #                 self.render(child)
     #             self.footnote_def_flag = 0
 
-    # def write_references(self):
-    #     self.doc.add_page_break()
-    #     self.write_heading(Tx("References"), 1)
-    #     for refid in sorted(self.referenced):
-    #         try:
-    #             reference = self.references[refid]
-    #         except Error:
-    #             continue
-    #         paragraph = self.doc.add_paragraph()
-    #         paragraph.paragraph_format.left_indent = docx.shared.Pt(
-    #             constants.DOCX_REFERENCE_INDENT
-    #         )
-    #         paragraph.paragraph_format.first_line_indent = -docx.shared.Pt(
-    #             constants.DOCX_REFERENCE_INDENT
-    #         )
-    #         run = paragraph.add_run(reference["name"])
-    #         run.font.bold = True
-    #         paragraph.add_run("  ")
-    #         self.write_reference_authors(paragraph, reference)
-    #         try:
-    #             method = getattr(self, f"write_reference_{reference['type']}")
-    #         except AttributeError:
-    #             print("unknown", reference["type"])
-    #         else:
-    #             method(paragraph, reference)
-    #         self.write_reference_external_links(paragraph, reference)
+    def write_references(self):
+        self.doc.add_page_break()
+        self.write_heading(self.tx("References"), 1)
+        for refid in sorted(self.referenced):
+            try:
+                reference = self.references[refid]
+            except Error:
+                continue
+            paragraph = self.doc.add_paragraph()
+            paragraph.paragraph_format.left_indent = docx.shared.Pt(
+                constants.DOCX_REFERENCE_INDENT
+            )
+            paragraph.paragraph_format.first_line_indent = -docx.shared.Pt(
+                constants.DOCX_REFERENCE_INDENT
+            )
+            run = paragraph.add_run(reference["name"])
+            run.font.bold = True
+            paragraph.add_run("  ")
+            self.write_reference_authors(paragraph, reference)
+            try:
+                method = getattr(self, f"write_reference_{reference['type']}")
+            except AttributeError:
+                print("unknown", reference["type"])
+            else:
+                method(paragraph, reference)
+            self.write_reference_external_links(paragraph, reference)
 
-    # def write_reference_authors(self, paragraph, reference):
-    #     count = len(reference["authors"])
-    #     for pos, author in enumerate(reference["authors"]):
-    #         if pos > 0:
-    #             if pos == count - 1:
-    #                 paragraph.add_run(" & ")
-    #             else:
-    #                 paragraph.add_run(", ")
-    #         paragraph.add_run(utils.short_person_name(author))
+    def write_reference_authors(self, paragraph, reference):
+        count = len(reference["authors"])
+        for pos, author in enumerate(reference["authors"]):
+            if pos > 0:
+                if pos == count - 1:
+                    paragraph.add_run(" & ")
+                else:
+                    paragraph.add_run(", ")
+            paragraph.add_run(utils.short_person_name(author))
 
-    # def write_reference_article(self, paragraph, reference):
-    #     paragraph.add_run(" ")
-    #     paragraph.add_run(f"({reference['year']})")
-    #     paragraph.add_run(" ")
-    #     paragraph.add_run(reference.reftitle)
-    #     try:
-    #         run = paragraph.add_run(f"{reference['journal']}")
-    #         run.font.italic = True
-    #         paragraph.add_run(" ")
-    #     except KeyError:
-    #         pass
-    #     try:
-    #         paragraph.add_run(f"{reference['volume']}")
-    #         paragraph.add_run(" ")
-    #     except KeyError:
-    #         pass
-    #     else:
-    #         try:
-    #             paragraph.add_run(f"({reference['number']})")
-    #         except KeyError:
-    #             pass
-    #     try:
-    #         paragraph.add_run(f": pp. {reference['pages'].replace('--', '-')}.")
-    #     except KeyError:
-    #         pass
+    def write_reference_article(self, paragraph, reference):
+        paragraph.add_run(" ")
+        paragraph.add_run(f"({reference['year']})")
+        paragraph.add_run(" ")
+        paragraph.add_run(reference.reftitle)
+        try:
+            run = paragraph.add_run(f"{reference['journal']}")
+            run.font.italic = True
+            paragraph.add_run(" ")
+        except KeyError:
+            pass
+        try:
+            paragraph.add_run(f"{reference['volume']}")
+            paragraph.add_run(" ")
+        except KeyError:
+            pass
+        else:
+            try:
+                paragraph.add_run(f"({reference['number']})")
+            except KeyError:
+                pass
+        try:
+            paragraph.add_run(f": pp. {reference['pages'].replace('--', '-')}.")
+        except KeyError:
+            pass
 
-    # def write_reference_book(self, paragraph, reference):
-    #     paragraph.add_run(" ")
-    #     paragraph.add_run(f"({reference['year']})")
-    #     paragraph.add_run(" ")
-    #     run = paragraph.add_run(reference.reftitle)
-    #     run.font.italic = True
-    #     try:
-    #         paragraph.add_run(f" {reference['publisher']}.")
-    #     except KeyError:
-    #         pass
-    #     try:
-    #         paragraph.add_run(f", {reference['edition_published']}")
-    #     except KeyError:
-    #         pass
+    def write_reference_book(self, paragraph, reference):
+        paragraph.add_run(" ")
+        paragraph.add_run(f"({reference['year']})")
+        paragraph.add_run(" ")
+        run = paragraph.add_run(reference.reftitle)
+        run.font.italic = True
+        try:
+            paragraph.add_run(f" {reference['publisher']}.")
+        except KeyError:
+            pass
+        try:
+            paragraph.add_run(f", {reference['edition_published']}")
+        except KeyError:
+            pass
 
-    # def write_reference_link(self, paragraph, reference):
-    #     paragraph.add_run(" ")
-    #     paragraph.add_run(f"({reference['year']})")
-    #     paragraph.add_run(" ")
-    #     run = paragraph.add_run(reference.reftitle)
-    #     run.font.italic = True
-    #     paragraph.add_run(" ")
-    #     try:
-    #         self.add_hyperlink(paragraph, reference["url"], "")
-    #     except KeyError:
-    #         pass
-    #     try:
-    #         paragraph.add_run(f" Accessed {reference['accessed']}.")
-    #     except KeyError:
-    #         pass
+    def write_reference_link(self, paragraph, reference):
+        paragraph.add_run(" ")
+        paragraph.add_run(f"({reference['year']})")
+        paragraph.add_run(" ")
+        run = paragraph.add_run(reference.reftitle)
+        run.font.italic = True
+        paragraph.add_run(" ")
+        try:
+            self.add_hyperlink(paragraph, reference["url"], "")
+        except KeyError:
+            pass
+        try:
+            paragraph.add_run(f" Accessed {reference['accessed']}.")
+        except KeyError:
+            pass
 
-    # def write_reference_external_links(self, paragraph, reference):
-    #     any_item = False
-    #     if reference.get("url"):
-    #         self.add_hyperlink(paragraph, reference["url"], reference["url"])
-    #         any_item = True
-    #     for key, (label, template) in constants.REFS_LINKS.items():
-    #         try:
-    #             value = reference[key]
-    #             if any_item:
-    #                 paragraph.add_run(", ")
-    #             else:
-    #                 paragraph.add_run(" ")
-    #             self.add_hyperlink(
-    #                 paragraph, template.format(value=value), f"{label}:{value}"
-    #             )
-    #             any_item = True
-    #         except KeyError:
-    #             pass
+    def write_reference_external_links(self, paragraph, reference):
+        any_item = False
+        if reference.get("url"):
+            self.add_hyperlink(paragraph, reference["url"], reference["url"])
+            any_item = True
+        for key, (label, template) in constants.REFS_LINKS.items():
+            try:
+                value = reference[key]
+                if any_item:
+                    paragraph.add_run(", ")
+                else:
+                    paragraph.add_run(" ")
+                self.add_hyperlink(
+                    paragraph, template.format(value=value), f"{label}:{value}"
+                )
+                any_item = True
+            except KeyError:
+                pass
 
-    # def write_indexed(self):
-    #     self.doc.add_page_break()
-    #     self.write_heading(Tx("Index"), 1)
-    #     items = sorted(self.indexed.items(), key=lambda i: i[0].casefold())
-    #     for canonical, entries in items:
-    #         paragraph = self.doc.add_paragraph(canonical, style="Body Text")
-    #         paragraph.paragraph_format.keep_with_next = True
-    #         entries.sort(key=lambda e: e["ordinal"])
-    #         for entry in entries:
-    #             paragraph = self.doc.add_paragraph(
-    #                 entry["heading"], style="Body Text"
-    #             )
-    #             paragraph.paragraph_format.left_indent = docx.shared.Pt(
-    #                 constants.DOCX_INDEXED_INDENT
-    #             )
-    #             if entry is not entries[-1]:
-    #                 paragraph.paragraph_format.keep_with_next = True
-    #         paragraph.paragraph_format.space_after = docx.shared.Pt(
-    #             constants.DOCX_INDEXED_SPACE_AFTER
-    #         )
+    def write_indexed(self):
+        self.doc.add_page_break()
+        self.write_heading(self.tx("Index"), 1)
+        items = sorted(self.indexed.items(), key=lambda i: i[0].casefold())
+        for canonical, entries in items:
+            paragraph = self.doc.add_paragraph(canonical, style="Body Text")
+            paragraph.paragraph_format.keep_with_next = True
+            entries.sort(key=lambda e: e["ordinal"])
+            for entry in entries:
+                paragraph = self.doc.add_paragraph(
+                    entry["heading"], style="Body Text"
+                )
+                paragraph.paragraph_format.left_indent = docx.shared.Pt(
+                    constants.DOCX_INDEXED_INDENT
+                )
+                if entry is not entries[-1]:
+                    paragraph.paragraph_format.keep_with_next = True
+            paragraph.paragraph_format.space_after = docx.shared.Pt(
+                constants.DOCX_INDEXED_SPACE_AFTER
+            )
 
 
 class Renderer:
@@ -505,15 +526,15 @@ class Renderer:
         run.style = self.doc.styles["Macro Text Char"]
 
     def code_block(self, ast):
-        self.current_paragraph = self.doc.add_paragraph(style="macro")
-        self.style_stack.append("macro")
+        self.current_paragraph = self.doc.add_paragraph(style="Code")
+        self.style_stack.append("Code")
         for child in ast["children"]:
             self(child)
         self.style_stack.pop()
 
     def fenced_code(self, ast):
-        self.current_paragraph = self.doc.add_paragraph(style="macro")
-        self.style_stack.append("macro")
+        self.current_paragraph = self.doc.add_paragraph(style="Code")
+        self.style_stack.append("Code")
         for child in ast["children"]:
             self(child)
         self.style_stack.pop()
@@ -584,7 +605,7 @@ class Renderer:
                 raise ValueError(f"No such image '{ast['dest']}'")
 
         except ValueError as error:
-            self.current_paragraph = self.doc.add_paragraph(style="macro")
+            self.current_paragraph = self.doc.add_paragraph(style="Code")
             self.current_paragraph.add_run(str(error))
 
     def add_image(self, image_data, ast, factor):
@@ -669,12 +690,11 @@ class Renderer:
             self(child)
 
     def indexed(self, ast):
-        entries = self.indexed.setdefault(ast["canonical"], [])
+        entries = self.compiler.indexed.setdefault(ast["canonical"], [])
         entries.append(
             dict(
                 ordinal=self.current_text.ordinal,
-                fulltitle=self.current_text.fulltitle,
-                heading=self.current_text.heading,
+                title=self.current_text.title,
             )
         )
         run = self.current_paragraph.add_run(ast["term"])
@@ -686,8 +706,8 @@ class Renderer:
             run.font.underline = True
 
     def footnote_ref(self, ast):
-        # The label is used only for lookup; number is used for output.
         pass
+        # The label is used only for lookup; number is used for output.
         # label = ast["label"]
         # if self.footnotes_location == constants.FOOTNOTES_EACH_TEXT:
         #     entries = self.footnotes.setdefault(self.current_text.fulltitle, {})
@@ -797,125 +817,6 @@ class Renderer:
 
     def link_ref_def(self, ast):
         pass
-
-
-# class BookWriter(Writer):
-#     "DOCX book writer."
-
-#     def get_content(self):
-#         "Create the DOCX document of the book return its content."
-#         paragraph = self.doc.add_paragraph(style="Title")
-#         run = paragraph.add_run(self.text.title)
-
-#         if self.text.subtitle:
-#             paragraph = self.doc.add_paragraph(style="Heading 1")
-#             paragraph.add_run(self.text.subtitle)
-
-#         # Split authors into runs to allow line break between them.
-#         paragraph = self.doc.add_paragraph(style="Heading 2")
-#         for author in self.text.authors:
-#             paragraph.add_run(author)
-#             if author != self.text.authors[-1]:
-#                 paragraph.add_run(", ")
-
-#         self_initialize()
-#         self(self.text.ast())
-
-#         if self.title_page_metadata:
-#             paragraph = self.doc.add_paragraph()
-#             paragraph.paragraph_format.space_before = docx.shared.Pt(
-#                 constants.DOCX_METADATA_SPACER
-#             )
-
-#             run = paragraph.add_run(f"{Tx('Status')}: {Tx(self.text.status)}")
-#             run.font.italic = True
-#             run.add_break()
-#             run = paragraph.add_run(f"{Tx('Created')}: {utils.str_datetime_display()}")
-#             run.font.italic = True
-#             run.add_break()
-#             run = paragraph.add_run(
-#                 f'{Tx("Modified")}: {utils.str_datetime_display(self.text.modified)}'
-#             )
-#             run.font.italic = True
-
-#         # Write table of contents (TOC) page(s).
-#         if self.toc_level:
-#             self.doc.add_page_break()
-#             self.write_heading(Tx("Contents"), 1)
-#             for item in self.book:
-#                 if item.level > self.toc_level:
-#                     continue
-#                 if item.status == constants.OMITTED:
-#                     continue
-#                 paragraph = self.doc.add_paragraph(style="Body Text")
-#                 paragraph.paragraph_format.left_indent = docx.shared.Pt(
-#                     constants.DOCX_TOC_INDENT * item.level
-#                 )
-#                 paragraph.paragraph_format.first_line_indent = -docx.shared.Pt(
-#                     constants.DOCX_TOC_INDENT
-#                 )
-#                 paragraph.add_run(item.heading)
-
-#             # At this stage it is not known if any references or indexed.
-#             self.doc.add_paragraph(Tx("References"), style="Body Text")
-#             self.doc.add_paragraph(Tx("Index"), style="Body Text")
-
-#         # First-level items are chapters.
-#         for item in self.text.items:
-#             if item.status == constants.OMITTED:
-#                 continue
-#             if item.status < self.include_status:
-#                 continue
-
-#             if item.is_section:
-#                 self.write_section(item, level=item.level)
-#             else:
-#                 self.write_text(item, level=item.level)
-
-#             if self.footnotes_location == constants.FOOTNOTES_EACH_CHAPTER:
-#                 self.write_chapter_footnotes(item)
-
-#         if self.footnotes_location == constants.FOOTNOTES_END_OF_BOOK:
-#             self.write_book_footnotes()
-
-#         # References pages written, even if empty, since TOC pages contains item.
-#         if self.toc_level or self.referenced:
-#             self.write_references()
-#         # Indexed pages written, even if empty, since TOC pages contains item.
-#         if self.toc_level or self.indexed:
-#             self.write_indexed()
-
-#         output = io.BytesIO()
-#         self.doc.save(output)
-#         return output.getvalue()
-
-
-# class ItemWriter(Writer):
-#     "DOCX item (section or text) writer."
-
-#     def get_content(self, item):
-#         "Create the DOCX document of the given item and return its content."
-#         # Change to the modified datetime of the item
-#         self.doc.core_properties.modified = item.modified
-
-#         # Force footnotes at end of each text.
-#         self.footnotes_location = constants.FOOTNOTES_EACH_TEXT
-
-#         if item.is_section:
-#             self.write_section(item, level=item.level, skip_page_break=True)
-#         else:
-#             self.write_text(item, level=item.level, skip_page_break=True)
-
-#         # Here it is possible to skip references pages, in none.
-#         if self.referenced:
-#             self.write_references()
-#         # Here it is possible to skip indexed pages, in none.
-#         if self.indexed:
-#             self.write_indexed()
-
-#         output = io.BytesIO()
-#         self.doc.save(output)
-#         return output.getvalue()
 
 
 if __name__ == "__main__":

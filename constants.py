@@ -11,11 +11,11 @@ SAFE_CHARACTERS = set(string.ascii_letters + string.digits)
 
 DATETIME_ISOFORMAT = "%Y-%m-%d %H:%M:%S"
 
-FOOTNOTES_EACH_TEXT = "after each text"
-FOOTNOTES_EACH_CHAPTER = "after each chapter"
-FOOTNOTES_END_OF_BOOK = "at end of book"
-
 MAX_LEVEL = 6
+
+FOOTNOTES_TEXT = "text"
+FOOTNOTES_CHAPTER = "chapter"
+FOOTNOTES_BOOK = "book"
 
 DOCX_MAX_PAGE_BREAK_LEVEL = 4
 DOCX_MAX_TOC_LEVEL = 4
@@ -23,12 +23,9 @@ DOCX_TOC_INDENT = 15
 DOCX_TOC_SPACE_BEFORE = 0
 DOCX_TOC_SPACE_AFTER = 0
 DOCX_NORMAL_FONT = "Arial"
+DOCX_FONT_SIZES = [28, 22, 19, 16, 14, 13, 12]
 DOCX_NORMAL_FONT_SIZE = 12
 DOCX_NORMAL_LINE_SPACING = 17
-DOCX_SYNOPSIS_INDENT = 16
-DOCX_SYNOPSIS_LINE_SPACING = 15
-DOCX_SYNOPSIS_SPACE_BEFORE = 10
-DOCX_SYNOPSIS_SPACE_AFTER = 10
 DOCX_QUOTE_INDENT = 16
 DOCX_CODE_FONT = "Courier"
 DOCX_CODE_FONT_SIZE = 11
@@ -48,11 +45,15 @@ EN_US = "en-US"
 SV_SE = "sv-SE"
 
 LEXICON = {
-    SV_SE: {
+    SV_SE: {                    # Key: 'en-GB' term; value: 'sv-SE' term.
         "created": "skapad",
         "modified": "ändrad",
+        "contents": "innehåll",
+        "references": "referenser",
+        "index": "register",
+        "footnotes": "fotnoter",
     }
 }
-LEXICON[SV_SE].update(
-    dict([(k.capitalize(), v.capitalize()) for k, v in LEXICON[SV_SE].items()])
-)
+for k, v in list(LEXICON[SV_SE].items()): # 'list': Avoid update collision issues.
+    if k.lower() == k:   # If not lower-case, then explicit case.
+        LEXICON[SV_SE][k.capitalize()] = v.capitalize()
