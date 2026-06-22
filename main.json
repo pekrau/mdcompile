@@ -1,0 +1,327 @@
+{
+  "children": [
+    {
+      "element": "blank_line"
+    },
+    {
+      "level": 1,
+      "inline_body": "",
+      "children": [
+        {
+          "element": "raw_text",
+          "children": "Test Markdown",
+          "escape": true
+        }
+      ],
+      "element": "heading"
+    },
+    {
+      "element": "blank_line"
+    },
+    {
+      "level": 2,
+      "inline_body": "",
+      "children": [
+        {
+          "element": "raw_text",
+          "children": "Subtitle",
+          "escape": true
+        }
+      ],
+      "element": "heading"
+    },
+    {
+      "element": "blank_line"
+    },
+    {
+      "bullet": "-",
+      "ordered": false,
+      "start": 1,
+      "tight": true,
+      "children": [
+        {
+          "children": [
+            {
+              "inline_body": "",
+              "children": [
+                {
+                  "element": "raw_text",
+                  "children": "List item",
+                  "escape": true
+                }
+              ],
+              "element": "paragraph"
+            }
+          ],
+          "element": "list_item"
+        },
+        {
+          "children": [
+            {
+              "inline_body": "",
+              "children": [
+                {
+                  "element": "raw_text",
+                  "children": "Another list item",
+                  "escape": true
+                }
+              ],
+              "element": "paragraph"
+            }
+          ],
+          "element": "list_item"
+        }
+      ],
+      "element": "list"
+    },
+    {
+      "element": "blank_line"
+    },
+    {
+      "bullet": "1.",
+      "ordered": true,
+      "start": 1,
+      "tight": true,
+      "children": [
+        {
+          "children": [
+            {
+              "inline_body": "",
+              "children": [
+                {
+                  "element": "raw_text",
+                  "children": "First list item",
+                  "escape": true
+                }
+              ],
+              "element": "paragraph"
+            }
+          ],
+          "element": "list_item"
+        },
+        {
+          "children": [
+            {
+              "inline_body": "",
+              "children": [
+                {
+                  "element": "raw_text",
+                  "children": "Second list item",
+                  "escape": true
+                }
+              ],
+              "element": "paragraph"
+            },
+            {
+              "bullet": "-",
+              "ordered": false,
+              "start": 1,
+              "tight": true,
+              "children": [
+                {
+                  "children": [
+                    {
+                      "inline_body": "",
+                      "children": [
+                        {
+                          "element": "raw_text",
+                          "children": "Sublist item",
+                          "escape": true
+                        }
+                      ],
+                      "element": "paragraph"
+                    }
+                  ],
+                  "element": "list_item"
+                },
+                {
+                  "children": [
+                    {
+                      "inline_body": "",
+                      "children": [
+                        {
+                          "element": "raw_text",
+                          "children": "Another sublist item",
+                          "escape": true
+                        }
+                      ],
+                      "element": "paragraph"
+                    }
+                  ],
+                  "element": "list_item"
+                }
+              ],
+              "element": "list"
+            }
+          ],
+          "element": "list_item"
+        }
+      ],
+      "element": "list"
+    },
+    {
+      "element": "blank_line"
+    },
+    {
+      "lang": "",
+      "extra": "",
+      "children": [
+        {
+          "element": "raw_text",
+          "children": "Code block\n",
+          "escape": false
+        }
+      ],
+      "element": "fenced_code"
+    },
+    {
+      "element": "blank_line"
+    },
+    {
+      "inline_body": "",
+      "children": [
+        {
+          "children": [
+            {
+              "element": "raw_text",
+              "children": "This is emphasized text.",
+              "escape": true
+            }
+          ],
+          "element": "emphasis"
+        },
+        {
+          "soft": true,
+          "children": "\n",
+          "element": "line_break"
+        },
+        {
+          "element": "raw_text",
+          "children": "And here is a footnote",
+          "escape": true
+        },
+        {
+          "label": "footnote",
+          "element": "footnote_ref"
+        },
+        {
+          "element": "raw_text",
+          "children": ".",
+          "escape": true
+        }
+      ],
+      "element": "paragraph"
+    },
+    {
+      "element": "blank_line"
+    },
+    {
+      "inline_body": "",
+      "children": [
+        {
+          "element": "raw_text",
+          "children": "More text in a new paragraph with a ",
+          "escape": true
+        },
+        {
+          "dest": "https://svt.se/",
+          "title": "SVT",
+          "children": [
+            {
+              "element": "raw_text",
+              "children": "link",
+              "escape": true
+            }
+          ],
+          "element": "link"
+        },
+        {
+          "element": "raw_text",
+          "children": " that uses reference style",
+          "escape": true
+        },
+        {
+          "soft": true,
+          "children": "\n",
+          "element": "line_break"
+        },
+        {
+          "element": "raw_text",
+          "children": "and ",
+          "escape": true
+        },
+        {
+          "dest": "https://bbc.uk/",
+          "title": "BBC",
+          "children": [
+            {
+              "element": "raw_text",
+              "children": "another",
+              "escape": true
+            }
+          ],
+          "element": "link"
+        }
+      ],
+      "element": "paragraph"
+    },
+    {
+      "element": "blank_line"
+    },
+    {
+      "label": "footnote",
+      "children": [
+        {
+          "inline_body": "",
+          "children": [
+            {
+              "element": "raw_text",
+              "children": "This is the footnote text.",
+              "escape": true
+            }
+          ],
+          "element": "paragraph"
+        },
+        {
+          "element": "blank_line"
+        }
+      ],
+      "element": "footnote_def"
+    },
+    {
+      "label": "x",
+      "dest": "https://svt.se/",
+      "title": "\"SVT\"",
+      "element": "link_ref_def"
+    }
+  ],
+  "link_ref_defs": {
+    "x": [
+      "https://svt.se/",
+      "\"SVT\""
+    ]
+  },
+  "footnotes": {
+    "footnote": {
+      "label": "footnote",
+      "children": [
+        {
+          "inline_body": "",
+          "children": [
+            {
+              "element": "raw_text",
+              "children": "This is the footnote text.",
+              "escape": true
+            }
+          ],
+          "element": "paragraph"
+        },
+        {
+          "element": "blank_line"
+        }
+      ],
+      "element": "footnote_def"
+    }
+  },
+  "element": "document"
+}
