@@ -59,7 +59,7 @@ class EmdashRenderer:
 
 
 class Indexed(marko.inline.InlineElement):
-    "Markdown extension for indexed term."
+    "Markdown extension for an indexed term."
 
     pattern = re.compile(r"\[#(.+?)(\|(.+?))?\]", re.S)  # Yes, this isn't quite right.
     parse_children = False

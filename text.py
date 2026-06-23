@@ -41,29 +41,45 @@ class Text:
         self.footnotes = self.ast.pop("footnotes", {})
 
     def __repr__(self):
-        return f"Text({self.filename})"
+        return f'Text("{self.filename}")'
 
-    def all_texts(self):
-        "Return the list of this text and its subtexts in order."
-        result = [self]
+    def __len__(self):
+        "Number of texts."
+        # XXX Why does 'list(self)' give infinite recursion?
+        return len([t for t in self])
+
+    def __iter__(self):
+        "Yield this text and all its subtexts in order."
+        yield self
         for subtext in self.subtexts:
-            result.extend(subtext.all_texts())
-        return result
+            yield from iter(subtext)
 
     @property
     def main(self):
         "Return the main (root) text in the hierarchy."
         text = self
-        while text.supertext:
+        while text.supertext is not None:
             text = supertext
         return text
+
+    @property
+    def ordinal(self):
+        "The position if this text in its parent's subtexts list."
+        text = self
+        supertext = self.supertext
+        result = []
+        while supertext is not None:
+            result.append(supertext.subtexts.index(text))
+            text = supertext
+            supertext = text.supertext
+        return tuple(reversed(result))
 
     @property
     def level(self):
         "Level of the text in the hierarchy."
         result = 0
         supertext = self.supertext
-        while supertext:
+        while supertext is not None:
             result += 1
             supertext = supertext.supertext
         return result
@@ -79,7 +95,7 @@ class Text:
     @property
     def title(self):
         "The title for this text."
-        return self.frontmatter.get("title") or self.filename.stem
+        return self.frontmatter.get("title") or self.filename.stem.replace("_", " ")
 
     @property
     def subtitle(self):
@@ -93,37 +109,51 @@ class Text:
 
     @property
     def language(self):
-        "Return the language used. Defined in the nearest text."
-        return self.get_nearest("language", constants.SV_SE)
+        "Return the language used. From the nearest text."
+        return self._get_nearest("language", constants.SV_SE)
 
     @property
     def title_page_metadata(self):
-        "Whether to display metadata in the title page. Defined in the main text."
+        "Whether to display metadata in the title page. From the main text."
         return self.main.frontmatter.get("title_page_metadata", False)
 
     @property
     def output_comments(self):
-        "Whether comments are to be output. Defined in the nearest text."
-        return self.get_nearest("output_comments", False)
+        "Whether comments are to be output. From the nearest text."
+        return self._get_nearest("output_comments", False)
 
     @property
     def page_break_level(self):
-        "Hierarchy level at which to do page break. Defined in the main text."
+        "Hierarchy level at which to do page break. From the main text."
         return self.main.frontmatter.get("page_break_level", 1)
 
     @property
     def toc_level(self):
-        "The table-of-contents level. Defined in the main text."
+        "The table-of-contents level. From the main text."
         return self.main.frontmatter.get("toc_level", 1)
 
     @property
     def footnotes_location(self):
-        "The footnotes location. Defined in the main text."
+        "The footnotes location. From the main text."
         return self.main.frontmatter.get("footnotes_location", constants.FOOTNOTES_TEXT)
 
-    def get_nearest(self, key, default=None):
+    @property
+    def indexed_font(self):
+        "The font modifier use for display of indexed terms."
+        return self._get_nearest("indexed_font", constants.UNDERLINE)
+
+    @property
+    def reference_font(self):
+        "The font modifier use for display of reference."
+        return self._get_nearest("reference_font", constants.NORMAL)
+
+    def elements(self):
+        "Return an iterator over the AST elements of this text."
+        return ASTIterator(self.ast)
+
+    def _get_nearest(self, key, default=None):
         text = self
-        while text:
+        while text is not None:
             try:
                 return self.frontmatter[key]
             except KeyError:
@@ -133,8 +163,25 @@ class Text:
             return default
 
 
+class ASTIterator:
+
+    def __init__(self, ast):
+        self.ast = ast
+
+    def __iter__(self):
+        yield self.ast
+        try:
+            children = self.ast["children"]
+            if isinstance(children, list):
+                for ast in children:
+                    yield from iter(ASTIterator(ast))
+        except KeyError:
+            pass
+
+
 if __name__ == "__main__":
     t = Text("main.md")
-    print(t.modified)
-    for t2 in t.all_texts():
-        print(t2, t2.level)
+    for t2 in t:
+        print("   ", t2, t2.ordinal)
+        for e in t2.elements():
+            print(e["element"])

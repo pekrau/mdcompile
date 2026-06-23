@@ -24,6 +24,7 @@ class Compiler:
 
     def __init__(self, main):
         assert isinstance(main, Text)
+        print(f"{len(main)} texts.")
         self.main = main
         self.tx = utils.Tx(self.main.language)
 
@@ -125,18 +126,21 @@ class Compiler:
         run._r.append(instrText)
         run._r.append(fldChar2)
 
-    def print(self, msg):
-        print(msg)
-
     def write(self, filename=None):
         "Convert the main text and its subtexts, if any, into DOCX."
+        # Key: canonical; value: dict(id, fulltitle, ordinal)
+        self.indexed = {}
         # Key: fulltitle; value: dict(label, ast_children)
         self.footnotes = {}
         # Actually referenced. Key: refid; value: reference
         self.referenced = set()
-        # Key: canonical; value: dict(id, fulltitle, ordinal)
-        self.indexed = {}
 
+        # Set document-wide parameters.
+        self.page_break_level = self.main.page_break_level
+        self.toc_level = self.main.toc_level
+        self.footnotes_location = self.main.footnotes_location
+
+        # Output title page.
         paragraph = self.doc.add_paragraph(style="Title 0")
         run = paragraph.add_run(self.main.title)
 
@@ -152,7 +156,7 @@ class Compiler:
                 paragraph.add_
 
         # Title-page text; synopsis, or similar.
-        Renderer(self)(self.main.ast)
+        Renderer(self, self.main)
 
         if self.main.title_page_metadata:
             paragraph = self.doc.add_paragraph()
@@ -173,7 +177,7 @@ class Compiler:
         if self.main.toc_level:
             self.doc.add_page_break()
             self.write_heading(self.tx("Contents"), 1)
-            for text in self.main.all_texts()[1:]: # Skip the main file; title page.
+            for text in list(self.main)[1:]: # Skip the main file; title page.
                 if text.level > self.main.toc_level:
                     continue
                 paragraph = self.doc.add_paragraph(style="Body Text")
@@ -185,10 +189,23 @@ class Compiler:
                 )
                 paragraph.add_run(text.title)
 
-            # At this stage it is not known if any references or indexed.
-            # XXX WRONG; Can be checked.
-            self.doc.add_paragraph(self.tx("References"), style="Body Text")
-            self.doc.add_paragraph(self.tx("Index"), style="Body Text")
+            # Output entries for references and indexed, if any such.
+            for text in self.main:
+                for element in text.elements():
+                    if element["element"] == "indexed":
+                        self.doc.add_paragraph(self.tx("Index"), style="Body Text")
+                        break
+                else:
+                    continue
+                break
+            for text in self.main:
+                for element in text.elements():
+                    if element["element"] == "reference":
+                        self.doc.add_paragraph(self.tx("References"), style="Body Text")
+                        break
+                else:
+                    continue
+                break
 
         # First-level subtexts are chapters.
         for text in self.main.subtexts:
@@ -212,14 +229,14 @@ class Compiler:
         self.doc.save(filename)
 
     def write_text(self, text):
-        if text.level <= self.main.page_break_level:
+        if text.level <= self.page_break_level:
             self.doc.add_page_break()
         self.write_heading(text.title, text.level)
         if text.subtitle:
             self.write_heading(text.subtitle, text.level + 1)
         self.current_text = text
 
-        Renderer(self)(text.ast)
+        Renderer(self, text)
 
         if self.footnotes_location == constants.FOOTNOTES_TEXT:
             self.write_text_footnotes(text)
@@ -409,7 +426,7 @@ class Compiler:
             entries.sort(key=lambda e: e["ordinal"])
             for entry in entries:
                 paragraph = self.doc.add_paragraph(
-                    entry["heading"], style="Body Text"
+                    entry["title"], style="Body Text"
                 )
                 paragraph.paragraph_format.left_indent = docx.shared.Pt(
                     constants.DOCX_INDEXED_INDENT
@@ -424,7 +441,7 @@ class Compiler:
 class Renderer:
     "Render the Markdown text AST."
 
-    def __init__(self, compiler):
+    def __init__(self, compiler, text):
         self.compiler = compiler
         self.doc = compiler.doc
         self.list_stack = []
@@ -433,6 +450,9 @@ class Renderer:
         self.italic = False
         self.subscript = False
         self.superscript = False
+        self.indexed_font = text.indexed_font
+        self.reference_font = text.reference_font
+        self(text.ast)
 
     def __call__(self, ast):
         "Render the Markdown text AST."
@@ -671,10 +691,10 @@ class Renderer:
     def list(self, ast):
         data = dict(
             ordered=ast["ordered"],
-            bullet=ast["bullet"],  # XXX Currently not used.
-            start=ast["start"],  # XXX Currently not used.
-            tight=ast["tight"],  # XXX Currently not used.
-            count=0,  # XXX Currently not used.
+            bullet=ast["bullet"],  # Currently not used.
+            start=ast["start"],  # Currently not used.
+            tight=ast["tight"],  # Currently not used.
+            count=0,  # Currently not used.
             levels=len(self.list_stack) + 1,
         )
         self.list_stack.append(data)
@@ -684,7 +704,7 @@ class Renderer:
 
     def list_item(self, ast):
         data = self.list_stack[-1]
-        data["count"] += 1  # Currently useless.
+        data["count"] += 1  # Currently not used.
         data["first_paragraph"] = True
         for child in ast["children"]:
             self(child)
@@ -693,8 +713,8 @@ class Renderer:
         entries = self.compiler.indexed.setdefault(ast["canonical"], [])
         entries.append(
             dict(
-                ordinal=self.current_text.ordinal,
-                title=self.current_text.title,
+                ordinal=self.compiler.current_text.ordinal,
+                title=self.compiler.current_text.title,
             )
         )
         run = self.current_paragraph.add_run(ast["term"])
@@ -710,14 +730,14 @@ class Renderer:
         # The label is used only for lookup; number is used for output.
         # label = ast["label"]
         # if self.footnotes_location == constants.FOOTNOTES_EACH_TEXT:
-        #     entries = self.footnotes.setdefault(self.current_text.fulltitle, {})
+        #     entries = self.footnotes.setdefault(self.compiler.current_text.fulltitle, {})
         #     number = len(entries) + 1
         #     key = label
         # elif self.footnotes_location in (
         #     constants.FOOTNOTES_EACH_CHAPTER,
         #     constants.FOOTNOTES_END_OF_BOOK,
         # ):
-        #     fulltitle = self.current_text.chapter.fulltitle
+        #     fulltitle = self.compiler.current_text.chapter.fulltitle
         #     entries = self.footnotes.setdefault(fulltitle, {})
         #     number = len(entries) + 1
         #     key = f"{fulltitle}-{label}"
@@ -730,13 +750,13 @@ class Renderer:
         pass
         # label = ast["label"]
         # if self.footnotes_location == constants.FOOTNOTES_EACH_TEXT:
-        #     fulltitle = self.current_text.fulltitle
+        #     fulltitle = self.compiler.current_text.fulltitle
         #     key = label
         # elif self.footnotes_location in (
         #     constants.FOOTNOTES_EACH_CHAPTER,
         #     constants.FOOTNOTES_END_OF_BOOK,
         # ):
-        #     fulltitle = self.current_text.chapter.fulltitle
+        #     fulltitle = self.compiler.current_text.chapter.fulltitle
         #     key = f"{fulltitle}-{label}"
         # # Footnote def may be missing.
         # try:

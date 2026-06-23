@@ -2,7 +2,7 @@
 
 import string
 
-VERSION = (0, 0, 1)
+VERSION = (0, 0, 2)
 __version__ = ".".join([str(n) for n in VERSION])
 
 EM_DASH = "\u2014"
@@ -12,6 +12,11 @@ SAFE_CHARACTERS = set(string.ascii_letters + string.digits)
 DATETIME_ISOFORMAT = "%Y-%m-%d %H:%M:%S"
 
 MAX_LEVEL = 6
+
+NORMAL = "normal"
+ITALIC = "italic"
+BOLD = "bold"
+UNDERLINE = "underline"
 
 FOOTNOTES_TEXT = "text"
 FOOTNOTES_CHAPTER = "chapter"
