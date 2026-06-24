@@ -18,7 +18,7 @@ def get_args(prog, default="main.md"):
         "-r",
         "--references",
         default=None,
-        help="Directory containing the references YAML files. Default: Environment variable REFERENCES if defined, else './references'."
+        help="Directory containing the references YAML files. Default: Environment variable REFERENCES if defined, else './references'.",
     )
     parser.add_argument(
         "-l",
@@ -60,7 +60,10 @@ def get_args(prog, default="main.md"):
         help="Output consecutive number to each paragraph.",
     )
     parser.add_argument(
-        "infile", nargs="?", default=default, help="Main Markdown file to convert,"
+        "infile",
+        nargs="?",
+        default=default,
+        help="Main Markdown file to convert. Default 'main.md'.",
     )
     return parser.parse_args()
 

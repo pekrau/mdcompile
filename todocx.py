@@ -50,7 +50,9 @@ class Compiler:
             sys.exit(f"Error: no such reference directory '{references}'")
 
         # Set output parameters
-        self.language = language or self.main.frontmatter.get("language", constants.SV_SE)
+        self.language = language or self.main.frontmatter.get(
+            "language", constants.SV_SE
+        )
         self.tx = utils.Tx(self.language)
         if toc_level is None:
             self.toc_level = self.main.frontmatter.get("toc_level", 1)
@@ -68,7 +70,9 @@ class Compiler:
             self.paragraph_number = 0
         else:
             self.paragraph_number = None
-        self.footnotes_location = footnotes_location or self.main.frontmatter.get("footnotes_location", constants.FOOTNOTES_TEXT)
+        self.footnotes_location = footnotes_location or self.main.frontmatter.get(
+            "footnotes_location", constants.FOOTNOTES_TEXT
+        )
 
     def write(self, filename=None):
         "Convert the main text and its subtexts, if any, into DOCX."
@@ -187,7 +191,9 @@ class Compiler:
                     continue
                 if element["name"] not in self.referenced:
                     try:
-                        self.referenced[element["name"]] = self.references[element["name"]]
+                        self.referenced[element["name"]] = self.references[
+                            element["name"]
+                        ]
                     except KeyError:
                         sys.exit(f"Error: no such reference: '{element['name']}'")
         self.indexed = {}

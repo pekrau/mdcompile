@@ -10,7 +10,7 @@ usage: todocx [-h] [-r REFERENCES] [-l {sv-SE,en-GB,en-US}] [-t TOC_LEVEL]
               [infile]
 
 positional arguments:
-  infile                Main Markdown file to convert,
+  infile                Main Markdown file to convert. Default 'main.md'.
 
 options:
   -h, --help            show this help message and exit
