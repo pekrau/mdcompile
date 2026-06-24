@@ -2,6 +2,7 @@
 
 import argparse
 import datetime as dt
+import sys
 
 # For debugging.
 import icecream
@@ -128,17 +129,75 @@ class Compiler:
 
     def write(self, filename=None):
         "Convert the main text and its subtexts, if any, into DOCX."
-        # Key: canonical; value: dict(id, fulltitle, ordinal)
+        # Go through all elements in all texts to collect indexed and referenced.
         self.indexed = {}
-        # Key: fulltitle; value: dict(label, ast_children)
-        self.footnotes = {}
-        # Actually referenced. Key: refid; value: reference
-        self.referenced = set()
+        self.referenced = {}
+        for text in self.main:
+            for element in text.elements():
+                match element["element"]:
+                    case "indexed":
+                        entries = self.indexed.setdefault(element["canonical"], [])
+                        entries.append(
+                            dict(
+                                ordinal=text.ordinal,
+                                title=text.title,
+                            )
+                        )
+                    case "reference":
+                        # XXX actually fetch the reference and store.
+                        if element["id"] not in self.referenced:
+                            self.referenced[element["id"]] = "REFERENCE"
+        print(f"{len(self.indexed)} indexed terms.")
+        print(f"{len(self.referenced)} references.")
 
-        # Set document-wide parameters.
-        self.page_break_level = self.main.page_break_level
-        self.toc_level = self.main.toc_level
-        self.footnotes_location = self.main.footnotes_location
+        # Transfer footnotes to the appropriate texts, and number them.
+        match self.main.footnotes_location:
+            case constants.FOOTNOTES_TEXT:
+                for text in self.main:
+                    number = 0
+                    for element in text.elements():
+                        if element["element"] == "footnote_ref":
+                            element["number"] = str(number := number + 1)
+                            text.footnotes[element["label"]]["number"] = number
+            case constants.FOOTNOTES_CHAPTER:
+                for chapter in self.main.subtexts:
+                    number = 0
+                    for text in chapter:
+                        for element in text.elements():
+                            if element["element"] == "footnote_ref":
+                                element["number"] = str(number := number + 1)
+                                text.footnotes[element["label"]]["number"] = number
+                        if text is not chapter:
+                            labels = set(chapter.footnotes.keys()).intersection(
+                                text.footnotes.keys()
+                            )
+                            if labels:
+                                sys.exit(
+                                    f"Error: footnote labels collision: {', '.join(labels)}"
+                                )
+                            chapter.footnotes.update(text.footnotes)
+                            text.footnotes.clear()
+            case constants.FOOTNOTES_BOOK:
+                number = 0
+                for text in self.main:
+                    for element in text.elements():
+                        if element["element"] == "footnote_ref":
+                            element["number"] = str(number := number + 1)
+                            text.footnotes[element["label"]]["number"] = number
+                    if text is not self.main:
+                        labels = set(self.main.footnotes.keys()).intersection(
+                            text.footnotes.keys()
+                        )
+                        if labels:
+                            sys.exit(
+                                f"Error: footnote labels collision: {', '.join(labels)}"
+                            )
+                        self.main.footnotes.update(text.footnotes)
+                        text.footnotes.clear()
+
+        # 0: not in footnote; -1: footnote started; >= 1: footnote number to start
+        self.footnote_def_flag = 0
+        print(f"Footnotes at end of {self.main.footnotes_location}.")
 
         # Output title page.
         paragraph = self.doc.add_paragraph(style="Title 0")
@@ -153,10 +212,10 @@ class Compiler:
         for author in self.main.authors:
             paragraph.add_run(author)
             if author != self.main.authors[-1]:
-                paragraph.add_
+                paragraph.add_run(", ")
 
         # Title-page text; synopsis, or similar.
-        Renderer(self, self.main)
+        Renderer(self, self.main.ast)
 
         if self.main.title_page_metadata:
             paragraph = self.doc.add_paragraph()
@@ -177,7 +236,7 @@ class Compiler:
         if self.main.toc_level:
             self.doc.add_page_break()
             self.write_heading(self.tx("Contents"), 1)
-            for text in list(self.main)[1:]: # Skip the main file; title page.
+            for text in list(self.main)[1:]:  # Skip the main file; title page.
                 if text.level > self.main.toc_level:
                     continue
                 paragraph = self.doc.add_paragraph(style="Body Text")
@@ -189,60 +248,51 @@ class Compiler:
                 )
                 paragraph.add_run(text.title)
 
-            # Output entries for references and indexed, if any such.
-            for text in self.main:
-                for element in text.elements():
-                    if element["element"] == "indexed":
-                        self.doc.add_paragraph(self.tx("Index"), style="Body Text")
-                        break
-                else:
-                    continue
-                break
-            for text in self.main:
-                for element in text.elements():
-                    if element["element"] == "reference":
-                        self.doc.add_paragraph(self.tx("References"), style="Body Text")
-                        break
-                else:
-                    continue
-                break
+            # Output entries for book footnotes, references and indexed, if any such.
+            if self.main.footnotes:
+                self.doc.add_paragraph(self.tx("Footnotes"), style="Body Text")
+            if self.referenced:
+                self.doc.add_paragraph(self.tx("References"), style="Body Text")
+            if self.indexed:
+                self.doc.add_paragraph(self.tx("Index"), style="Body Text")
 
         # First-level subtexts are chapters.
         for text in self.main.subtexts:
             self.write_text(text)
 
-            if self.footnotes_location == constants.FOOTNOTES_CHAPTER:
-                self.write_chapter_footnotes(text)
-
-        if self.footnotes_location == constants.FOOTNOTES_BOOK:
-            self.write_book_footnotes()
-
-        # References pages written, even if empty, since TOC pages contains item.
-        if self.toc_level or self.referenced:
-            self.write_references()
-
-        # Indexed pages written, even if empty, since TOC pages contains item.
-        if self.toc_level or self.indexed:
-            self.write_indexed()
+        self.write_footnotes(self.main)
+        self.write_references()
+        self.write_indexed()
 
         filename = filename or self.main.filename.with_suffix(".docx")
         self.doc.save(filename)
 
     def write_text(self, text):
-        if text.level <= self.page_break_level:
+        if text.level <= text.page_break_level:
             self.doc.add_page_break()
         self.write_heading(text.title, text.level)
         if text.subtitle:
             self.write_heading(text.subtitle, text.level + 1)
         self.current_text = text
 
-        Renderer(self, text)
-
-        if self.footnotes_location == constants.FOOTNOTES_TEXT:
-            self.write_text_footnotes(text)
+        Renderer(self, text.ast)
 
         for subtext in text.subtexts:
             self.write_text(subtext)
+
+        self.write_footnotes(text)
+
+    def write_footnotes(self, text):
+        "Write out the footnotes for the text, if any."
+        if text.footnotes:
+            if text.level <= 1:
+                self.doc.add_page_break()
+            self.write_heading(self.tx("Footnotes"), text.level + 1)
+            for footnote in sorted(text.footnotes.values(), key=lambda f: f["number"]):
+                self.footnote_def_flag = footnote["number"]
+                for child in footnote["children"]:
+                    Renderer(self, child)
+                self.footnote_def_flag = 0
 
     def write_heading(self, heading, level):
         if level <= constants.MAX_LEVEL:
@@ -253,57 +303,10 @@ class Compiler:
             run = paragraph.add_run(heading)
             run.font.italic = True
 
-    def write_text_footnotes(self, text):
-        "Footnotes at end of the text."
-        pass
-    #     assert self.footnotes_location == constants.FOOTNOTES_TEXT
-    #     try:
-    #         footnotes = self.footnotes[text.fulltitle]
-    #     except KeyError:
-    #         return
-    #     paragraph = self.doc.add_heading(
-    #         self.tx("Footnotes"), max(3, constants.MAX_LEVEL - 1)
-    #     )
-    #     for entry in sorted(footnotes.values(), key=lambda e: e["number"]):
-    #         self.footnote_def_flag = entry["number"]
-    #         for child in entry["ast_children"]:
-    #             self.render(child)
-    #         self.footnote_def_flag = 0
-
-    def write_chapter_footnotes(self, item):
-        "Footnote definitions at the end of a chapter."
-        pass
-    #     assert self.footnotes_location == constants.FOOTNOTES_CHAPTER
-    #     try:
-    #         footnotes = self.footnotes[item.chapter.fulltitle]
-    #     except KeyError:
-    #         return
-    #     self.doc.add_page_break()
-    #     self.write_heading(self.tx("Footnotes"), 3)
-    #     for entry in sorted(footnotes.values(), key=lambda e: e["number"]):
-    #         self.footnote_def_flag = entry["number"]
-    #         for child in entry["ast_children"]:
-    #             self.render(child)
-    #         self.footnote_def_flag = 0
-
-    def write_book_footnotes(self):
-        "Footnote definitions as a separate section at the end of the book."
-        pass
-    #     assert self.footnotes_location == constants.FOOTNOTES_BOOK
-    #     self.doc.add_page_break()
-    #     self.write_heading(self.tx("Footnotes"), 1)
-    #     for item in self.main.items:
-    #         footnotes = self.footnotes.get(item.fulltitle, {})
-    #         if not footnotes:
-    #             continue
-    #         self.write_heading(item.heading, 2)
-    #         for entry in sorted(footnotes.values(), key=lambda e: e["number"]):
-    #             self.footnote_def_flag = entry["number"]
-    #             for child in entry["ast_children"]:
-    #                 self.render(child)
-    #             self.footnote_def_flag = 0
-
     def write_references(self):
+        "Write references pages, if any such items."
+        if not self.referenced:
+            return
         self.doc.add_page_break()
         self.write_heading(self.tx("References"), 1)
         for refid in sorted(self.referenced):
@@ -417,6 +420,9 @@ class Compiler:
                 pass
 
     def write_indexed(self):
+        "Write indexed terms pages, if any such items."
+        if not self.indexed:
+            return
         self.doc.add_page_break()
         self.write_heading(self.tx("Index"), 1)
         items = sorted(self.indexed.items(), key=lambda i: i[0].casefold())
@@ -425,9 +431,7 @@ class Compiler:
             paragraph.paragraph_format.keep_with_next = True
             entries.sort(key=lambda e: e["ordinal"])
             for entry in entries:
-                paragraph = self.doc.add_paragraph(
-                    entry["title"], style="Body Text"
-                )
+                paragraph = self.doc.add_paragraph(entry["title"], style="Body Text")
                 paragraph.paragraph_format.left_indent = docx.shared.Pt(
                     constants.DOCX_INDEXED_INDENT
                 )
@@ -441,7 +445,7 @@ class Compiler:
 class Renderer:
     "Render the Markdown text AST."
 
-    def __init__(self, compiler, text):
+    def __init__(self, compiler, ast):
         self.compiler = compiler
         self.doc = compiler.doc
         self.list_stack = []
@@ -450,9 +454,7 @@ class Renderer:
         self.italic = False
         self.subscript = False
         self.superscript = False
-        self.indexed_font = text.indexed_font
-        self.reference_font = text.reference_font
-        self(text.ast)
+        self(ast)
 
     def __call__(self, ast):
         "Render the Markdown text AST."
@@ -476,18 +478,23 @@ class Renderer:
     def paragraph(self, ast):
         self.current_paragraph = self.doc.add_paragraph()
 
-        # if self.footnote_def_flag != 0:
-        #     self.current_paragraph.paragraph_format.left_indent = docx.shared.Pt(
-        #         constants.DOCX_FOOTNOTE_INDENT
-        #     )
-        #     if self.footnote_def_flag > 0:
-        #         self.current_paragraph.paragraph_format.first_line_indent = (
-        #             -docx.shared.Pt(constants.DOCX_FOOTNOTE_INDENT)
-        #         )
-        #         run = self.current_paragraph.add_run(f"{self.footnote_def_flag}.")
-        #         run.font.bold = True
-        #         self.current_paragraph.add_run(" ")
-        #         self.footnote_def_flag = -1
+        # Either starting footnote definition, or within it.
+        if self.compiler.footnote_def_flag != 0:
+            self.current_paragraph.paragraph_format.left_indent = docx.shared.Pt(
+                constants.DOCX_FOOTNOTE_INDENT
+            )
+            # Starting footnote definition.
+            if self.compiler.footnote_def_flag > 0:
+                self.current_paragraph.paragraph_format.first_line_indent = (
+                    -docx.shared.Pt(constants.DOCX_FOOTNOTE_INDENT)
+                )
+                run = self.current_paragraph.add_run(
+                    f"{self.compiler.footnote_def_flag}."
+                )
+                run.font.bold = True
+                self.current_paragraph.add_run(" ")
+                # Signal for being within footnote definition.
+                self.compiler.footnote_def_flag = -1
 
         if self.list_stack:
             data = self.list_stack[-1]
@@ -710,59 +717,23 @@ class Renderer:
             self(child)
 
     def indexed(self, ast):
-        entries = self.compiler.indexed.setdefault(ast["canonical"], [])
-        entries.append(
-            dict(
-                ordinal=self.compiler.current_text.ordinal,
-                title=self.compiler.current_text.title,
-            )
-        )
         run = self.current_paragraph.add_run(ast["term"])
-        if self.indexed_font == constants.ITALIC:
+        if self.compiler.main.indexed_font == constants.ITALIC:
             run.font.italic = True
-        elif self.indexed_font == constants.BOLD:
+        elif self.compiler.main.indexed_font == constants.BOLD:
             run.font.bold = True
-        elif self.indexed_font == constants.UNDERLINE:
+        elif self.compiler.main.indexed_font == constants.UNDERLINE:
             run.font.underline = True
 
     def footnote_ref(self, ast):
-        pass
-        # The label is used only for lookup; number is used for output.
-        # label = ast["label"]
-        # if self.footnotes_location == constants.FOOTNOTES_EACH_TEXT:
-        #     entries = self.footnotes.setdefault(self.compiler.current_text.fulltitle, {})
-        #     number = len(entries) + 1
-        #     key = label
-        # elif self.footnotes_location in (
-        #     constants.FOOTNOTES_EACH_CHAPTER,
-        #     constants.FOOTNOTES_END_OF_BOOK,
-        # ):
-        #     fulltitle = self.compiler.current_text.chapter.fulltitle
-        #     entries = self.footnotes.setdefault(fulltitle, {})
-        #     number = len(entries) + 1
-        #     key = f"{fulltitle}-{label}"
-        # entries[key] = dict(label=label, number=number)
-        # run = self.current_paragraph.add_run(str(number))
-        # run.font.superscript = True
-        # run.font.bold = True
+        run = self.current_paragraph.add_run(ast["number"])
+        run.font.superscript = True
+        run.font.bold = True
+        run.font.underline = True
 
     def footnote_def(self, ast):
+        "The footnote definition in the element stream is not used; ignore."
         pass
-        # label = ast["label"]
-        # if self.footnotes_location == constants.FOOTNOTES_EACH_TEXT:
-        #     fulltitle = self.compiler.current_text.fulltitle
-        #     key = label
-        # elif self.footnotes_location in (
-        #     constants.FOOTNOTES_EACH_CHAPTER,
-        #     constants.FOOTNOTES_END_OF_BOOK,
-        # ):
-        #     fulltitle = self.compiler.current_text.chapter.fulltitle
-        #     key = f"{fulltitle}-{label}"
-        # # Footnote def may be missing.
-        # try:
-        #     self.footnotes[fulltitle][key]["ast_children"] = ast["children"]
-        # except KeyError:
-        #     pass
 
     def reference(self, ast):
         if ast["id"] in self.references:

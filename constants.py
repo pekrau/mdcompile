@@ -2,7 +2,7 @@
 
 import string
 
-VERSION = (0, 0, 2)
+VERSION = (0, 0, 3)
 __version__ = ".".join([str(n) for n in VERSION])
 
 EM_DASH = "\u2014"
@@ -50,7 +50,7 @@ EN_US = "en-US"
 SV_SE = "sv-SE"
 
 LEXICON = {
-    SV_SE: {                    # Key: 'en-GB' term; value: 'sv-SE' term.
+    SV_SE: {  # Key: 'en-GB' term; value: 'sv-SE' term.
         "created": "skapad",
         "modified": "ändrad",
         "contents": "innehåll",
@@ -59,6 +59,6 @@ LEXICON = {
         "footnotes": "fotnoter",
     }
 }
-for k, v in list(LEXICON[SV_SE].items()): # 'list': Avoid update collision issues.
-    if k.lower() == k:   # If not lower-case, then explicit case.
+for k, v in list(LEXICON[SV_SE].items()):  # 'list': Avoid update collision issues.
+    if k.lower() == k:  # If not lower-case, then explicit case.
         LEXICON[SV_SE][k.capitalize()] = v.capitalize()

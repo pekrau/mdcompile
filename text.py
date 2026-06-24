@@ -59,7 +59,7 @@ class Text:
         "Return the main (root) text in the hierarchy."
         text = self
         while text.supertext is not None:
-            text = supertext
+            text = text.supertext
         return text
 
     @property
@@ -139,13 +139,13 @@ class Text:
 
     @property
     def indexed_font(self):
-        "The font modifier use for display of indexed terms."
-        return self._get_nearest("indexed_font", constants.UNDERLINE)
+        "The font modifier use for display of indexed terms. From the main text."
+        return self.main.frontmatter.get("indexed_font", constants.UNDERLINE)
 
     @property
     def reference_font(self):
-        "The font modifier use for display of reference."
-        return self._get_nearest("reference_font", constants.NORMAL)
+        "The font modifier use for display of reference. From the main text."
+        return self.main.frontmatter.get("reference_font", constants.NORMAL)
 
     def elements(self):
         "Return an iterator over the AST elements of this text."
@@ -181,7 +181,7 @@ class ASTIterator:
 
 if __name__ == "__main__":
     t = Text("main.md")
-    for t2 in t:
+    for t2 in list(t):
         print("   ", t2, t2.ordinal)
         for e in t2.elements():
             print(e["element"])
