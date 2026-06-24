@@ -2,7 +2,7 @@
 
 import string
 
-VERSION = (0, 0, 3)
+VERSION = (0, 1, 0)
 __version__ = ".".join([str(n) for n in VERSION])
 
 EM_DASH = "\u2014"
@@ -21,6 +21,12 @@ UNDERLINE = "underline"
 FOOTNOTES_TEXT = "text"
 FOOTNOTES_CHAPTER = "chapter"
 FOOTNOTES_BOOK = "book"
+
+REFS_LINKS = dict(
+    doi=("DOI", "https://doi.org/{value}"),
+    pmid=("PubMed", "https://pubmed.ncbi.nlm.nih.gov/{value}"),
+    isbn=("ISBN", "https://isbnsearch.org/isbn/{value}"),
+)
 
 DOCX_MAX_PAGE_BREAK_LEVEL = 4
 DOCX_MAX_TOC_LEVEL = 4

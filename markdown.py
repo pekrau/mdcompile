@@ -91,7 +91,6 @@ class Reference(marko.inline.InlineElement):
 
     def __init__(self, match):
         self.name = match.group(1).strip()
-        self.id = utils.normalize(self.name)
 
 
 class ReferenceRenderer:

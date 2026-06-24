@@ -2,6 +2,7 @@
 
 import argparse
 import datetime as dt
+import os
 import sys
 
 # For debugging.
@@ -23,10 +24,11 @@ import utils
 class Compiler:
     "Compile to DOCX format document."
 
-    def __init__(self, main):
+    def __init__(self, main, references):
         assert isinstance(main, Text)
         print(f"{len(main)} texts.")
         self.main = main
+        self.references = references
         self.tx = utils.Tx(self.main.language)
 
         self.doc = docx.Document()
@@ -144,9 +146,8 @@ class Compiler:
                             )
                         )
                     case "reference":
-                        # XXX actually fetch the reference and store.
-                        if element["id"] not in self.referenced:
-                            self.referenced[element["id"]] = "REFERENCE"
+                        if element["name"] not in self.referenced:
+                            self.referenced[element["name"]] = self.references[element["name"]]
         print(f"{len(self.indexed)} indexed terms.")
         print(f"{len(self.referenced)} references.")
 
@@ -249,7 +250,7 @@ class Compiler:
                 paragraph.add_run(text.title)
 
             # Output entries for book footnotes, references and indexed, if any such.
-            if self.main.footnotes:
+            if self.main.footnotes_location == constants.FOOTNOTES_BOOK and self.main.footnotes:
                 self.doc.add_paragraph(self.tx("Footnotes"), style="Body Text")
             if self.referenced:
                 self.doc.add_paragraph(self.tx("References"), style="Body Text")
@@ -259,9 +260,17 @@ class Compiler:
         # First-level subtexts are chapters.
         for text in self.main.subtexts:
             self.write_text(text)
+            if text.footnotes_location == constants.FOOTNOTES_CHAPTER and text.footnotes:
+                self.doc.add_page_break()
+                self.write_heading(self.tx("Footnotes"), 3)
+                self.write_footnotes(text)
 
-        self.write_footnotes(self.main)
-        self.write_references()
+        if self.main.footnotes_location == constants.FOOTNOTES_BOOK:
+            self.doc.add_page_break()
+            self.write_heading(self.tx("Footnotes"), 1)
+            self.write_footnotes(self.main)
+
+        self.write_referenced()
         self.write_indexed()
 
         filename = filename or self.main.filename.with_suffix(".docx")
@@ -277,22 +286,20 @@ class Compiler:
 
         Renderer(self, text.ast)
 
+        if text.footnotes_location == constants.FOOTNOTES_TEXT and text.footnotes:
+            self.write_heading(self.tx("Footnotes"), text.level + 2)
+            self.write_footnotes(text)
+
         for subtext in text.subtexts:
             self.write_text(subtext)
 
-        self.write_footnotes(text)
-
     def write_footnotes(self, text):
-        "Write out the footnotes for the text, if any."
-        if text.footnotes:
-            if text.level <= 1:
-                self.doc.add_page_break()
-            self.write_heading(self.tx("Footnotes"), text.level + 1)
-            for footnote in sorted(text.footnotes.values(), key=lambda f: f["number"]):
-                self.footnote_def_flag = footnote["number"]
-                for child in footnote["children"]:
-                    Renderer(self, child)
-                self.footnote_def_flag = 0
+        "Write out the footnotes for the text."
+        for footnote in sorted(text.footnotes.values(), key=lambda f: f["number"]):
+            self.footnote_def_flag = footnote["number"]
+            for child in footnote["children"]:
+                Renderer(self, child)
+            self.footnote_def_flag = 0
 
     def write_heading(self, heading, level):
         if level <= constants.MAX_LEVEL:
@@ -303,17 +310,13 @@ class Compiler:
             run = paragraph.add_run(heading)
             run.font.italic = True
 
-    def write_references(self):
-        "Write references pages, if any such items."
+    def write_referenced(self):
+        "Write referenced pages, if any such items."
         if not self.referenced:
             return
         self.doc.add_page_break()
         self.write_heading(self.tx("References"), 1)
-        for refid in sorted(self.referenced):
-            try:
-                reference = self.references[refid]
-            except Error:
-                continue
+        for name, reference in sorted(self.referenced.items()):
             paragraph = self.doc.add_paragraph()
             paragraph.paragraph_format.left_indent = docx.shared.Pt(
                 constants.DOCX_REFERENCE_INDENT
@@ -321,16 +324,17 @@ class Compiler:
             paragraph.paragraph_format.first_line_indent = -docx.shared.Pt(
                 constants.DOCX_REFERENCE_INDENT
             )
-            run = paragraph.add_run(reference["name"])
+            run = paragraph.add_run(reference["reference"])
             run.font.bold = True
             paragraph.add_run("  ")
             self.write_reference_authors(paragraph, reference)
             try:
                 method = getattr(self, f"write_reference_{reference['type']}")
             except AttributeError:
-                print("unknown", reference["type"])
+                sys.exit(f"Error: unknown reference type {reference['type']}")
             else:
                 method(paragraph, reference)
+            paragraph.add_run(".")
             self.write_reference_external_links(paragraph, reference)
 
     def write_reference_authors(self, paragraph, reference):
@@ -345,65 +349,52 @@ class Compiler:
 
     def write_reference_article(self, paragraph, reference):
         paragraph.add_run(" ")
-        paragraph.add_run(f"({reference['year']})")
-        paragraph.add_run(" ")
-        paragraph.add_run(reference.reftitle)
+        paragraph.add_run(reference["title"])
         try:
-            run = paragraph.add_run(f"{reference['journal']}")
+            run = paragraph.add_run(f", {reference['journal']}")
             run.font.italic = True
-            paragraph.add_run(" ")
         except KeyError:
             pass
         try:
-            paragraph.add_run(f"{reference['volume']}")
-            paragraph.add_run(" ")
+            paragraph.add_run(f" {reference['volume']}")
         except KeyError:
             pass
         else:
             try:
-                paragraph.add_run(f"({reference['number']})")
+                paragraph.add_run(f" ({reference['issue']})")
             except KeyError:
                 pass
         try:
-            paragraph.add_run(f": pp. {reference['pages'].replace('--', '-')}.")
+            paragraph.add_run(f" {reference['pages'].replace('--', '-')}")
         except KeyError:
             pass
 
     def write_reference_book(self, paragraph, reference):
         paragraph.add_run(" ")
-        paragraph.add_run(f"({reference['year']})")
-        paragraph.add_run(" ")
-        run = paragraph.add_run(reference.reftitle)
+        run = paragraph.add_run(reference["title"])
         run.font.italic = True
         try:
-            paragraph.add_run(f" {reference['publisher']}.")
-        except KeyError:
-            pass
-        try:
+            paragraph.add_run(f" {reference['publisher']}")
             paragraph.add_run(f", {reference['edition_published']}")
         except KeyError:
             pass
 
     def write_reference_link(self, paragraph, reference):
         paragraph.add_run(" ")
-        paragraph.add_run(f"({reference['year']})")
-        paragraph.add_run(" ")
-        run = paragraph.add_run(reference.reftitle)
+        run = paragraph.add_run(reference["title"])
         run.font.italic = True
-        paragraph.add_run(" ")
-        try:
-            self.add_hyperlink(paragraph, reference["url"], "")
-        except KeyError:
-            pass
-        try:
-            paragraph.add_run(f" Accessed {reference['accessed']}.")
-        except KeyError:
-            pass
+        if url := reference.get("url"):
+            paragraph.add_run(" ")
+            self.add_hyperlink(paragraph, url, "")
+            try:
+                paragraph.add_run(f" Accessed {reference['accessed']}.")
+            except KeyError:
+                pass
 
     def write_reference_external_links(self, paragraph, reference):
         any_item = False
-        if reference.get("url"):
-            self.add_hyperlink(paragraph, reference["url"], reference["url"])
+        if url := reference.get("url"):
+            self.add_hyperlink(paragraph, url, url)
             any_item = True
         for key, (label, template) in constants.REFS_LINKS.items():
             try:
@@ -440,6 +431,58 @@ class Compiler:
             paragraph.paragraph_format.space_after = docx.shared.Pt(
                 constants.DOCX_INDEXED_SPACE_AFTER
             )
+
+    # https://github.com/python-openxml/python-docx/issues/74#issuecomment-261169410
+    def add_hyperlink(self, paragraph, url, text, color="2222FF", underline=True):
+        """
+        A function that places a hyperlink within a paragraph object.
+
+        :param paragraph: The paragraph we are adding the hyperlink to.
+        :param url: A string containing the required url
+        :param text: The text displayed for the url
+        :return: The hyperlink object
+        """
+
+        # Get access to the document.xml.rels file and gets a new relation id value.
+        part = paragraph.part
+        r_id = part.relate_to(
+            url, docx.opc.constants.RELATIONSHIP_TYPE.HYPERLINK, is_external=True
+        )
+
+        # Create the w:hyperlink tag and add needed values.
+        hyperlink = docx.oxml.shared.OxmlElement("w:hyperlink")
+        hyperlink.set(
+            docx.oxml.shared.qn("r:id"),
+            r_id,
+        )
+
+        # Create a w:r element.
+        new_run = docx.oxml.shared.OxmlElement("w:r")
+
+        # Create a new w:rPr element.
+        rPr = docx.oxml.shared.OxmlElement("w:rPr")
+
+        # Add color if it is given.
+        if not color is None:
+            c = docx.oxml.shared.OxmlElement("w:color")
+            c.set(docx.oxml.shared.qn("w:val"), color)
+            rPr.append(c)
+
+        # Remove underlining if it is requested.
+        # XXX Does not seem to work? /Per Kraulis
+        if not underline:
+            u = docx.oxml.shared.OxmlElement("w:u")
+            u.set(docx.oxml.shared.qn("w:val"), "none")
+            rPr.append(u)
+
+        # Join all the xml elements together add add the required text to the w:r element.
+        new_run.append(rPr)
+        new_run.text = text
+        hyperlink.append(new_run)
+
+        paragraph._p.append(hyperlink)
+
+        return hyperlink
 
 
 class Renderer:
@@ -688,12 +731,12 @@ class Renderer:
         paragraph.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
 
     def link(self, ast):
-        # This handles only raw text within a link, nothing else.
+        # This handles only raw text within a link; can't handle multiple children.
         raw_text = []
         for child in ast["children"]:
             if child["element"] == "raw_text":
                 raw_text.append(child["children"])
-        self.add_hyperlink(self.current_paragraph, ast["dest"], "".join(raw_text))
+        self.compiler.add_hyperlink(self.current_paragraph, ast["dest"], "".join(raw_text))
 
     def list(self, ast):
         data = dict(
@@ -718,93 +761,26 @@ class Renderer:
 
     def indexed(self, ast):
         run = self.current_paragraph.add_run(ast["term"])
-        if self.compiler.main.indexed_font == constants.ITALIC:
-            run.font.italic = True
-        elif self.compiler.main.indexed_font == constants.BOLD:
-            run.font.bold = True
-        elif self.compiler.main.indexed_font == constants.UNDERLINE:
-            run.font.underline = True
+        run.font.underline = True
 
     def footnote_ref(self, ast):
-        run = self.current_paragraph.add_run(ast["number"])
+        run = self.current_paragraph.add_run(f" {ast['number']}")
         run.font.superscript = True
         run.font.bold = True
-        run.font.underline = True
 
     def footnote_def(self, ast):
         "The footnote definition in the element stream is not used; ignore."
         pass
 
     def reference(self, ast):
-        if ast["id"] in self.references:
-            self.referenced.add(ast["id"])
-            run = self.current_paragraph.add_run(ast["name"])
-            if self.reference_font == constants.ITALIC:
-                run.font.italic = True
-            elif self.reference_font == constants.BOLD:
-                run.font.bold = True
-            elif self.reference_font == constants.UNDERLINE:
-                run.font.underline = True
-        else:
-            self.current_paragraph.add_run(f'??? no such refid {ast["name"]} ???')
+        run = self.current_paragraph.add_run(ast["name"])
+        run.font.bold = True
 
     def comment(self, ast):
         if self.output_comments:
             run = self.current_paragraph.add_run(ast["comment"])
             run.font.bold = True
             run.font.highlight_color = docx.enum.text.WD_COLOR_INDEX.YELLOW
-
-    # https://github.com/python-openxml/python-docx/issues/74#issuecomment-261169410
-    def add_hyperlink(self, paragraph, url, text, color="2222FF", underline=True):
-        """
-        A function that places a hyperlink within a paragraph object.
-
-        :param paragraph: The paragraph we are adding the hyperlink to.
-        :param url: A string containing the required url
-        :param text: The text displayed for the url
-        :return: The hyperlink object
-        """
-
-        # Get access to the document.xml.rels file and gets a new relation id value.
-        part = paragraph.part
-        r_id = part.relate_to(
-            url, docx.opc.constants.RELATIONSHIP_TYPE.HYPERLINK, is_external=True
-        )
-
-        # Create the w:hyperlink tag and add needed values.
-        hyperlink = docx.oxml.shared.OxmlElement("w:hyperlink")
-        hyperlink.set(
-            docx.oxml.shared.qn("r:id"),
-            r_id,
-        )
-
-        # Create a w:r element.
-        new_run = docx.oxml.shared.OxmlElement("w:r")
-
-        # Create a new w:rPr element.
-        rPr = docx.oxml.shared.OxmlElement("w:rPr")
-
-        # Add color if it is given.
-        if not color is None:
-            c = docx.oxml.shared.OxmlElement("w:color")
-            c.set(docx.oxml.shared.qn("w:val"), color)
-            rPr.append(c)
-
-        # Remove underlining if it is requested.
-        # XXX Does not seem to work? /Per Kraulis
-        if not underline:
-            u = docx.oxml.shared.OxmlElement("w:u")
-            u.set(docx.oxml.shared.qn("w:val"), "none")
-            rPr.append(u)
-
-        # Join all the xml elements together add add the required text to the w:r element.
-        new_run.append(rPr)
-        new_run.text = text
-        hyperlink.append(new_run)
-
-        paragraph._p.append(hyperlink)
-
-        return hyperlink
 
     def link_ref_def(self, ast):
         pass
@@ -813,5 +789,5 @@ class Renderer:
 if __name__ == "__main__":
     args = utils.get_args("todocx")
     text = Text(args.infile)
-    compiler = Compiler(text)
+    compiler = Compiler(text, utils.ReferencesDir(os.environ["REFERENCES"]))
     compiler.write()

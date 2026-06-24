@@ -115,12 +115,12 @@ class Text:
     @property
     def title_page_metadata(self):
         "Whether to display metadata in the title page. From the main text."
-        return self.main.frontmatter.get("title_page_metadata", False)
+        return self.main.frontmatter.get("title_page_metadata", True)
 
     @property
     def output_comments(self):
         "Whether comments are to be output. From the nearest text."
-        return self._get_nearest("output_comments", False)
+        return self._get_nearest("output_comments", True)
 
     @property
     def page_break_level(self):
@@ -136,16 +136,6 @@ class Text:
     def footnotes_location(self):
         "The footnotes location. From the main text."
         return self.main.frontmatter.get("footnotes_location", constants.FOOTNOTES_TEXT)
-
-    @property
-    def indexed_font(self):
-        "The font modifier use for display of indexed terms. From the main text."
-        return self.main.frontmatter.get("indexed_font", constants.UNDERLINE)
-
-    @property
-    def reference_font(self):
-        "The font modifier use for display of reference. From the main text."
-        return self.main.frontmatter.get("reference_font", constants.NORMAL)
 
     def elements(self):
         "Return an iterator over the AST elements of this text."
