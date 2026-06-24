@@ -107,53 +107,12 @@ class Text:
         "Return the author(s) for this text."
         return self.frontmatter.get("authors", [])
 
-    @property
-    def language(self):
-        "Return the language used. From the nearest text."
-        return self._get_nearest("language", constants.SV_SE)
-
-    @property
-    def title_page_metadata(self):
-        "Whether to display metadata in the title page. From the main text."
-        return self.main.frontmatter.get("title_page_metadata", True)
-
-    @property
-    def output_comments(self):
-        "Whether comments are to be output. From the nearest text."
-        return self._get_nearest("output_comments", True)
-
-    @property
-    def page_break_level(self):
-        "Hierarchy level at which to do page break. From the main text."
-        return self.main.frontmatter.get("page_break_level", 1)
-
-    @property
-    def toc_level(self):
-        "The table-of-contents level. From the main text."
-        return self.main.frontmatter.get("toc_level", 1)
-
-    @property
-    def footnotes_location(self):
-        "The footnotes location. From the main text."
-        return self.main.frontmatter.get("footnotes_location", constants.FOOTNOTES_TEXT)
-
     def elements(self):
         "Return an iterator over the AST elements of this text."
-        return ASTIterator(self.ast)
-
-    def _get_nearest(self, key, default=None):
-        text = self
-        while text is not None:
-            try:
-                return self.frontmatter[key]
-            except KeyError:
-                pass
-            text = text.supertext
-        else:
-            return default
+        return AstIterator(self.ast)
 
 
-class ASTIterator:
+class AstIterator:
 
     def __init__(self, ast):
         self.ast = ast
@@ -164,7 +123,7 @@ class ASTIterator:
             children = self.ast["children"]
             if isinstance(children, list):
                 for ast in children:
-                    yield from iter(ASTIterator(ast))
+                    yield from iter(AstIterator(ast))
         except KeyError:
             pass
 

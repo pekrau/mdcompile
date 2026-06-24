@@ -14,7 +14,54 @@ import constants
 def get_args(prog, default="main.md"):
     "Define the command-line argument parser and return the arguments."
     parser = argparse.ArgumentParser(prog=prog)
-    parser.add_argument("infile", nargs="?", default=default)
+    parser.add_argument(
+        "-r",
+        "--references",
+        default=None,
+        help="Directory containing the references YAML files. Default: Environment variable REFERENCES if defined, else './references'."
+    )
+    parser.add_argument(
+        "-l",
+        "--language",
+        choices=constants.LANGUAGES,
+        default=None,
+        help=f"Language specification. Default '{constants.SV_SE}'.",
+    )
+    parser.add_argument(
+        "-t",
+        "--toc-level",
+        type=int,
+        default=None,
+        help="Level for display in Table of contents. Default 1.",
+    )
+    parser.add_argument(
+        "-b",
+        "--page-break-level",
+        type=int,
+        default=None,
+        help="Level at which to break for a new page. Default 1.",
+    )
+    parser.add_argument(
+        "--no-comments",
+        action="store_true",
+        help="Do not output comments.",
+    )
+    parser.add_argument(
+        "-f",
+        "--footnotes-location",
+        choices=constants.FOOTNOTES_LOCATIONS,
+        default=None,
+        help=f"Location of footnotes. Default '{constants.FOOTNOTES_TEXT}'.",
+    )
+    parser.add_argument(
+        "-p",
+        "--paragraph-numbers",
+        action="store_true",
+        help="Output consecutive number to each paragraph.",
+    )
+    parser.add_argument(
+        "infile", nargs="?", default=default, help="Main Markdown file to convert,"
+    )
     return parser.parse_args()
 
 
@@ -38,6 +85,7 @@ def short_person_name(name):
 
 
 def isoformat(datetime=None):
+    "ISO format date, no seconds."
     if datetime is None:
         datetime = dt.datetime.now()
     return datetime.strftime(constants.DATETIME_ISOFORMAT)
@@ -57,14 +105,18 @@ class Tx:
 
 
 class ReferencesDir:
-    "References stored in a named directory."
+    "Reference files stored in a named directory."
 
     def __init__(self, filepath):
         self.filepath = pathlib.Path(filepath)
+        if not self.filepath.exists():
+            raise IOError
+        if not self.filepath.is_dir():
+            raise IOError
 
     def __getitem__(self, name):
         "Return the reference given the name 'Lastname year'."
         filepath = self.filepath / f"{normalize(name)}.yaml"
         if not filepath.exists():
-            raise KeyError(f"no such reference {name}")
+            raise KeyError(f"no such reference: '{name}'")
         return yaml.safe_load(filepath.read_text())
