@@ -32,7 +32,7 @@ def get_args(prog, default="main.md"):
         "--toc-level",
         type=int,
         default=None,
-        help="Level for display in Table of contents. Default 1.",
+        help="Level for display in table of contents. Default 1.",
     )
     parser.add_argument(
         "-b",
@@ -46,7 +46,7 @@ def get_args(prog, default="main.md"):
         "--text-number-level",
         type=int,
         default=None,
-        help="Level at which to output number of the text. Default 1.",
+        help="Level at which to output the number of the text. Default 1.",
     )
     parser.add_argument(
         "--no-comments",
@@ -64,7 +64,7 @@ def get_args(prog, default="main.md"):
         "-p",
         "--paragraph-numbers",
         action="store_true",
-        help="Output consecutive number to each paragraph.",
+        help="Output consecutive number for each paragraph.",
     )
     parser.add_argument(
         "filename",
