@@ -6,5 +6,6 @@ authors:
 subtexts:
 - chapter1.md
 - chapter2.md
+text-number-level: 2
 ---
 This is a synopsis, or some such text.

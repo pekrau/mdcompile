@@ -42,6 +42,13 @@ def get_args(prog, default="main.md"):
         help="Level at which to break for a new page. Default 1.",
     )
     parser.add_argument(
+        "-n",
+        "--text-number-level",
+        type=int,
+        default=None,
+        help="Level at which to output number of the text. Default 1.",
+    )
+    parser.add_argument(
         "--no-comments",
         action="store_true",
         help="Do not output comments.",
@@ -60,7 +67,7 @@ def get_args(prog, default="main.md"):
         help="Output consecutive number to each paragraph.",
     )
     parser.add_argument(
-        "infile",
+        "filename",
         nargs="?",
         default=default,
         help="Main Markdown file to convert. Default 'main.md'.",

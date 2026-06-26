@@ -14,6 +14,8 @@ This is chapter 1, without explicit title.
 
 ##### Title level 5
 
+###### Title level 6
+
 And some ordinary text.
 
 - List item

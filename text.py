@@ -16,10 +16,14 @@ class Text:
 
     FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)
 
-    def __init__(self, filename, supertext=None):
+    def __init__(self, filename, supertext=None, ordinal=1):
         "Read this Markdown file and any subtexts it specifies and convert into AST."
         self.filename = pathlib.Path(filename)
         self.supertext = supertext
+        if supertext is None:
+            self.ordinal = ()
+        else:
+            self.ordinal = supertext.ordinal + (ordinal,)
         content = self.filename.read_text()
         match = self.FRONTMATTER.match(content)
         if match:
@@ -28,9 +32,9 @@ class Text:
         else:
             self.frontmatter = {}
             self.text = content
-        self.subtexts = [
-            Text(filename, self) for filename in self.frontmatter.get("subtexts", [])
-        ]
+        self.subtexts = []
+        for pos, filename in enumerate(self.frontmatter.get("subtexts", [])):
+            self.subtexts.append(Text(filename, supertext=self, ordinal=pos+1))
         self.ast = markdown.to_ast(self.text)
         # ========== XXX debug
         self.filename.with_suffix(".json").write_text(json.dumps(self.ast, indent=2))
@@ -61,18 +65,6 @@ class Text:
         while text.supertext is not None:
             text = text.supertext
         return text
-
-    @property
-    def ordinal(self):
-        "The position if this text in its parent's subtexts list."
-        text = self
-        supertext = self.supertext
-        result = []
-        while supertext is not None:
-            result.append(supertext.subtexts.index(text))
-            text = supertext
-            supertext = text.supertext
-        return tuple(reversed(result))
 
     @property
     def level(self):
@@ -132,5 +124,5 @@ if __name__ == "__main__":
     t = Text("main.md")
     for t2 in list(t):
         print("   ", t2, t2.ordinal)
-        for e in t2.elements():
-            print(e["element"])
+        # for e in t2.elements():
+        #     print(e["element"])

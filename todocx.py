@@ -31,6 +31,7 @@ class Compiler:
         language=None,
         toc_level=None,
         page_break_level=None,
+        text_number_level=None,
         no_comments=False,
         footnotes_location=None,
         paragraph_numbers=False,
@@ -55,23 +56,27 @@ class Compiler:
         )
         self.tx = utils.Tx(self.language)
         if toc_level is None:
-            self.toc_level = self.main.frontmatter.get("toc_level", 1)
+            self.toc_level = self.main.frontmatter.get("toc-level", 1)
         else:
             self.toc_level = toc_level
         if page_break_level is None:
-            self.page_break_level = self.main.frontmatter.get("page_break_level", 1)
+            self.page_break_level = self.main.frontmatter.get("page-break-level", 1)
         else:
             self.page_break_level = page_break_level
+        if text_number_level is None:
+            self.text_number_level = self.main.frontmatter.get("text-number-level", 1)
+        else:
+            self.text_number_level = text_number_level
         if no_comments:
             self.output_comments = False
         else:
-            self.output_comments = self.main.frontmatter.get("output_comments", True)
-        if paragraph_numbers or self.main.frontmatter.get("paragraph_numbers", False):
+            self.output_comments = self.main.frontmatter.get("output-comments", True)
+        if paragraph_numbers or self.main.frontmatter.get("paragraph-numbers", False):
             self.paragraph_number = 0
         else:
             self.paragraph_number = None
         self.footnotes_location = footnotes_location or self.main.frontmatter.get(
-            "footnotes_location", constants.FOOTNOTES_TEXT
+            "footnotes-location", constants.FOOTNOTES_TEXT
         )
 
     def write(self, filename=None):
@@ -201,13 +206,7 @@ class Compiler:
             for element in text.elements():
                 if element["element"] != "indexed":
                     continue
-                entries = self.indexed.setdefault(element["canonical"], [])
-                entries.append(
-                    dict(
-                        ordinal=text.ordinal,
-                        title=text.title,
-                    )
-                )
+                self.indexed.setdefault(element["canonical"], []).append(text)
 
         # Transfer footnotes to the appropriate texts, and number them.
         match self.footnotes_location:
@@ -274,7 +273,7 @@ class Compiler:
                 paragraph.add_run(", ")
 
         # Title-page text; synopsis, or similar.
-        Renderer(self, self.main.ast)
+        Renderer(self, self.main)
 
         # Write table of contents (TOC) page(s).
         # The DOCX format does not allow determining the page numbers before printing.
@@ -291,7 +290,7 @@ class Compiler:
                 paragraph.paragraph_format.first_line_indent = -docx.shared.Pt(
                     constants.DOCX_TOC_INDENT
                 )
-                paragraph.add_run(text.title)
+                paragraph.add_run(self.numbered_title(text))
 
             # Output entries for book footnotes, references and indexed, if any such.
             if (
@@ -333,14 +332,15 @@ class Compiler:
         self.doc.save(filename)
 
     def write_text(self, text):
+        "Output the contents of the text instance."
         if text.level <= self.page_break_level:
             self.doc.add_page_break()
-        self.write_heading(text.title, text.level)
+        self.write_heading(self.numbered_title(text), text.level)
         if text.subtitle:
             self.write_heading(text.subtitle, text.level + 1)
         self.current_text = text
 
-        Renderer(self, text.ast)
+        Renderer(self, text)
 
         if self.footnotes_location == constants.FOOTNOTES_TEXT and text.footnotes:
             self.write_heading(self.tx("Footnotes"), text.level + 2)
@@ -354,7 +354,7 @@ class Compiler:
         for footnote in sorted(text.footnotes.values(), key=lambda f: f["number"]):
             self.footnote_def_flag = footnote["number"]
             for child in footnote["children"]:
-                Renderer(self, child)
+                Renderer(self, ast=child)
             self.footnote_def_flag = 0
 
     def write_heading(self, heading, level):
@@ -365,6 +365,13 @@ class Compiler:
             paragraph = self.doc.add_paragraph()
             run = paragraph.add_run(heading)
             run.font.italic = True
+
+    def numbered_title(self, text, force=False):
+        "Return the title with a number prefix."
+        if text.level <= self.text_number_level or force:
+            return f"{'.'.join([str(i) for i in text.ordinal])}. {text.title}"
+        else:
+            return text.title
 
     def write_referenced(self):
         "Write referenced pages, if any such items."
@@ -473,16 +480,15 @@ class Compiler:
         self.doc.add_page_break()
         self.write_heading(self.tx("Index"), 1)
         items = sorted(self.indexed.items(), key=lambda i: i[0].casefold())
-        for canonical, entries in items:
+        for canonical, texts in items:
             paragraph = self.doc.add_paragraph(canonical, style="Body Text")
             paragraph.paragraph_format.keep_with_next = True
-            entries.sort(key=lambda e: e["ordinal"])
-            for entry in entries:
-                paragraph = self.doc.add_paragraph(entry["title"], style="Body Text")
+            for text in texts:
+                paragraph = self.doc.add_paragraph(self.numbered_title(text, force=True), style="Body Text")
                 paragraph.paragraph_format.left_indent = docx.shared.Pt(
                     constants.DOCX_INDEXED_INDENT
                 )
-                if entry is not entries[-1]:
+                if text is not texts[:-1]:
                     paragraph.paragraph_format.keep_with_next = True
             paragraph.paragraph_format.space_after = docx.shared.Pt(
                 constants.DOCX_INDEXED_SPACE_AFTER
@@ -544,16 +550,18 @@ class Compiler:
 class Renderer:
     "Render the Markdown text AST."
 
-    def __init__(self, compiler, ast):
+    def __init__(self, compiler, text=None, ast=None):
+        assert text is not None or ast is not None
         self.compiler = compiler
         self.doc = compiler.doc
+        self.text = text
         self.list_stack = []
         self.style_stack = ["Normal"]
         self.bold = False
         self.italic = False
         self.subscript = False
         self.superscript = False
-        self(ast)
+        self(ast or text.ast)
 
     def __call__(self, ast):
         "Render the Markdown text AST."
@@ -571,8 +579,10 @@ class Renderer:
 
     def heading(self, ast):
         # XXX Limited implementation; this just handles one child of raw text.
-        text = ast["children"][0]["children"]
-        self.compiler.write_heading(text, ast["level"])
+        level = ast["level"]
+        if self.text:
+            level += self.text.level
+        self.compiler.write_heading(ast["children"][0]["children"], level)
 
     def paragraph(self, ast):
         self.current_paragraph = self.doc.add_paragraph()
@@ -848,14 +858,5 @@ class Renderer:
 
 if __name__ == "__main__":
     args = utils.get_args("todocx")
-    compiler = Compiler(
-        filename=args.infile,
-        references=args.references,
-        language=args.language,
-        toc_level=args.toc_level,
-        page_break_level=args.page_break_level,
-        no_comments=args.no_comments,
-        footnotes_location=args.footnotes_location,
-        paragraph_numbers=args.paragraph_numbers,
-    )
+    compiler = Compiler(**vars(args))
     compiler.write()
