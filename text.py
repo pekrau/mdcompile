@@ -32,20 +32,22 @@ class Text:
         else:
             self.frontmatter = {}
             self.text = content
-        self.subtexts = []
-        for pos, filename in enumerate(self.frontmatter.get("subtexts", [])):
-            self.subtexts.append(Text(filename, supertext=self, ordinal=pos+1, debug=debug))
         self.ast = markdown.to_ast(self.text)
-        # ==========
         if debug:
             jsonfilename = self.filename.with_suffix(".json")
             jsonfilename.write_text(json.dumps(self.ast, indent=2))
             print(f"Wrote {jsonfilename}")
-        # ==========
-        # The link definitions are included in-place in the AST. Redundant here; remove.
+        # The link definitions are included in-place in the AST.
+        # This item in the AST is redundant; remove.
         self.ast.pop("link_ref_defs", None)
         # Store the footnote definitions for later handling.
         self.footnotes = self.ast.pop("footnotes", {})
+        # Read the subtexts, if any.
+        self.subtexts = []
+        for pos, filename in enumerate(self.frontmatter.get("subtexts", [])):
+            self.subtexts.append(
+                Text(filename, supertext=self, ordinal=pos + 1, debug=debug)
+            )
 
     def __repr__(self):
         return f'Text("{self.filename}")'

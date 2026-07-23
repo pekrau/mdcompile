@@ -485,7 +485,9 @@ class Compiler:
             paragraph = self.doc.add_paragraph(canonical, style="Body Text")
             paragraph.paragraph_format.keep_with_next = True
             for text in texts:
-                paragraph = self.doc.add_paragraph(self.numbered_title(text, force=True), style="Body Text")
+                paragraph = self.doc.add_paragraph(
+                    self.numbered_title(text, force=True), style="Body Text"
+                )
                 paragraph.paragraph_format.left_indent = docx.shared.Pt(
                     constants.DOCX_INDEXED_INDENT
                 )
