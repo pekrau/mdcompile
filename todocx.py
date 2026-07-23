@@ -35,8 +35,9 @@ class Compiler:
         no_comments=False,
         footnotes_location=None,
         paragraph_numbers=False,
+        debug=False,
     ):
-        self.main = Text(filename)
+        self.main = Text(filename, debug=debug)
         print(f"{len(self.main)} texts.")
 
         # Set the references directory.
@@ -858,5 +859,6 @@ class Renderer:
 
 if __name__ == "__main__":
     args = utils.get_args("todocx")
+    print(f"todocx {constants.__version__}: Compile Markdown files to docx.")
     compiler = Compiler(**vars(args))
     compiler.write()

@@ -6,7 +6,7 @@ DOCX or PDF book.
 ```
 usage: todocx [-h] [-r REFERENCES] [-l {sv-SE,en-GB,en-US}] [-t TOC_LEVEL]
               [-b PAGE_BREAK_LEVEL] [-n TEXT_NUMBER_LEVEL] [--no-comments]
-              [-f {book,chapter,text}] [-p]
+              [-f {book,chapter,text}] [-p] [-d]
               [filename]
 
 positional arguments:
@@ -32,4 +32,5 @@ options:
                         Location of footnotes. Default 'text'.
   -p, --paragraph-numbers
                         Output consecutive number for each paragraph.
+  -d, --debug           Debug mode; output Markdown AST to JSON file.
 ```

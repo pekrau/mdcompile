@@ -67,6 +67,12 @@ def get_args(prog, default="main.md"):
         help="Output consecutive number for each paragraph.",
     )
     parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_true",
+        help="Debug mode; output Markdown AST to JSON file.",
+    )
+    parser.add_argument(
         "filename",
         nargs="?",
         default=default,

@@ -16,7 +16,7 @@ class Text:
 
     FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)
 
-    def __init__(self, filename, supertext=None, ordinal=1):
+    def __init__(self, filename, supertext=None, ordinal=1, debug=False):
         "Read this Markdown file and any subtexts it specifies and convert into AST."
         self.filename = pathlib.Path(filename)
         self.supertext = supertext
@@ -34,10 +34,13 @@ class Text:
             self.text = content
         self.subtexts = []
         for pos, filename in enumerate(self.frontmatter.get("subtexts", [])):
-            self.subtexts.append(Text(filename, supertext=self, ordinal=pos+1))
+            self.subtexts.append(Text(filename, supertext=self, ordinal=pos+1, debug=debug))
         self.ast = markdown.to_ast(self.text)
-        # ========== XXX debug
-        self.filename.with_suffix(".json").write_text(json.dumps(self.ast, indent=2))
+        # ==========
+        if debug:
+            jsonfilename = self.filename.with_suffix(".json")
+            jsonfilename.write_text(json.dumps(self.ast, indent=2))
+            print(f"Wrote {jsonfilename}")
         # ==========
         # The link definitions are included in-place in the AST. Redundant here; remove.
         self.ast.pop("link_ref_defs", None)
