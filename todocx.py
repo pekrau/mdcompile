@@ -37,8 +37,8 @@ class Compiler:
         paragraph_numbers=False,
         debug=False,
     ):
-        self.main = Text(filename, debug=debug)
-        print(f"{len(self.main)} texts.")
+        self.top = Text(filename, debug=debug)
+        print(f"{len(self.top)} texts.")
 
         # Set the references directory.
         if references is None:
@@ -52,36 +52,36 @@ class Compiler:
             sys.exit(f"Error: no such reference directory '{references}'")
 
         # Set output parameters
-        self.language = language or self.main.frontmatter.get(
+        self.language = language or self.top.frontmatter.get(
             "language", constants.SV_SE
         )
         self.tx = utils.Tx(self.language)
         if toc_level is None:
-            self.toc_level = self.main.frontmatter.get("toc-level", 1)
+            self.toc_level = self.top.frontmatter.get("toc-level", 1)
         else:
             self.toc_level = toc_level
         if page_break_level is None:
-            self.page_break_level = self.main.frontmatter.get("page-break-level", 1)
+            self.page_break_level = self.top.frontmatter.get("page-break-level", 1)
         else:
             self.page_break_level = page_break_level
         if text_number_level is None:
-            self.text_number_level = self.main.frontmatter.get("text-number-level", 1)
+            self.text_number_level = self.top.frontmatter.get("text-number-level", 1)
         else:
             self.text_number_level = text_number_level
         if no_comments:
             self.output_comments = False
         else:
-            self.output_comments = self.main.frontmatter.get("output-comments", True)
-        if paragraph_numbers or self.main.frontmatter.get("paragraph-numbers", False):
+            self.output_comments = self.top.frontmatter.get("output-comments", True)
+        if paragraph_numbers or self.top.frontmatter.get("paragraph-numbers", False):
             self.paragraph_number = 0
         else:
             self.paragraph_number = None
-        self.footnotes_location = footnotes_location or self.main.frontmatter.get(
+        self.footnotes_location = footnotes_location or self.top.frontmatter.get(
             "footnotes-location", constants.FOOTNOTES_TEXT
         )
 
     def write(self, filename=None):
-        "Convert the main text and its subtexts, if any, into DOCX."
+        "Convert the top text and its subtexts, if any, into DOCX."
         # Create and set up the DOCX document
         self.doc = docx.Document()
 
@@ -163,13 +163,13 @@ class Compiler:
 
         # Define the footer contents.
         section.footer.paragraphs[0].text = (
-            f"{self.tx('Created')}: {utils.isoformat()}\t{self.tx('Latest modification')}: {utils.isoformat(self.main.modified)}"
+            f"{self.tx('Created')}: {utils.isoformat()}\t{self.tx('Latest modification')}: {utils.isoformat(self.top.modified)}"
         )
 
         # Set Dublin core metadata.
-        self.doc.core_properties.author = ", ".join(self.main.authors)
+        self.doc.core_properties.author = ", ".join(self.top.authors)
         self.doc.core_properties.created = dt.datetime.now()
-        self.doc.core_properties.modified = self.main.modified
+        self.doc.core_properties.modified = self.top.modified
         if self.language:
             self.doc.core_properties.language = self.language
 
@@ -191,7 +191,7 @@ class Compiler:
 
         # Go through all elements in all texts to collect referenced and indexed.
         self.referenced = {}
-        for text in self.main:
+        for text in self.top:
             for element in text.elements():
                 if element["element"] != "reference":
                     continue
@@ -203,7 +203,7 @@ class Compiler:
                     except KeyError:
                         sys.exit(f"Error: no such reference: '{element['name']}'")
         self.indexed = {}
-        for text in self.main:
+        for text in self.top:
             for element in text.elements():
                 if element["element"] != "indexed":
                     continue
@@ -212,14 +212,14 @@ class Compiler:
         # Transfer footnotes to the appropriate texts, and number them.
         match self.footnotes_location:
             case constants.FOOTNOTES_TEXT:
-                for text in self.main:
+                for text in self.top:
                     number = 0
                     for element in text.elements():
                         if element["element"] == "footnote_ref":
                             element["number"] = str(number := number + 1)
                             text.footnotes[element["label"]]["number"] = number
             case constants.FOOTNOTES_CHAPTER:
-                for chapter in self.main.subtexts:
+                for chapter in self.top.subtexts:
                     number = 0
                     for text in chapter:
                         for element in text.elements():
@@ -238,20 +238,20 @@ class Compiler:
                             text.footnotes.clear()
             case constants.FOOTNOTES_BOOK:
                 number = 0
-                for text in self.main:
+                for text in self.top:
                     for element in text.elements():
                         if element["element"] == "footnote_ref":
                             element["number"] = str(number := number + 1)
                             text.footnotes[element["label"]]["number"] = number
-                    if text is not self.main:
-                        labels = set(self.main.footnotes.keys()).intersection(
+                    if text is not self.top:
+                        labels = set(self.top.footnotes.keys()).intersection(
                             text.footnotes.keys()
                         )
                         if labels:
                             sys.exit(
                                 f"Error: footnote labels collision: {', '.join(labels)}"
                             )
-                        self.main.footnotes.update(text.footnotes)
+                        self.top.footnotes.update(text.footnotes)
                         text.footnotes.clear()
 
         # 0: not in footnote; -1: footnote started; >= 1: footnote number to start
@@ -260,28 +260,28 @@ class Compiler:
 
         # Output title page.
         paragraph = self.doc.add_paragraph(style="Title 0")
-        run = paragraph.add_run(self.main.title)
+        run = paragraph.add_run(self.top.title)
 
-        if self.main.subtitle:
+        if self.top.subtitle:
             paragraph = self.doc.add_paragraph(style="Title 1")
-            paragraph.add_run(self.main.subtitle)
+            paragraph.add_run(self.top.subtitle)
 
         # Split authors into runs to allow line break between them.
         paragraph = self.doc.add_paragraph(style="Title 2")
-        for author in self.main.authors:
+        for author in self.top.authors:
             paragraph.add_run(author)
-            if author != self.main.authors[-1]:
+            if author != self.top.authors[-1]:
                 paragraph.add_run(", ")
 
         # Title-page text; synopsis, or similar.
-        Renderer(self, self.main)
+        Renderer(self, self.top)
 
         # Write table of contents (TOC) page(s).
         # The DOCX format does not allow determining the page numbers before printing.
         if self.toc_level:
             self.doc.add_page_break()
             self.write_heading(self.tx("Contents"), 1)
-            for text in list(self.main)[1:]:  # Skip the main file; title page.
+            for text in list(self.top)[1:]:  # Skip the top file; title page.
                 if text.level > self.toc_level:
                     continue
                 paragraph = self.doc.add_paragraph(style="Body Text")
@@ -296,7 +296,7 @@ class Compiler:
             # Output entries for book footnotes, references and indexed, if any such.
             if (
                 self.footnotes_location == constants.FOOTNOTES_BOOK
-                and self.main.footnotes
+                and self.top.footnotes
             ):
                 self.doc.add_paragraph(self.tx("Footnotes"), style="Body Text")
             if self.referenced:
@@ -305,7 +305,7 @@ class Compiler:
                 self.doc.add_paragraph(self.tx("Index"), style="Body Text")
 
         # First-level subtexts are chapters.
-        for text in self.main.subtexts:
+        for text in self.top.subtexts:
             self.write_text(text)
             if (
                 self.footnotes_location == constants.FOOTNOTES_CHAPTER
@@ -318,7 +318,7 @@ class Compiler:
         if self.footnotes_location == constants.FOOTNOTES_BOOK:
             self.doc.add_page_break()
             self.write_heading(self.tx("Footnotes"), 1)
-            self.write_footnotes(self.main)
+            self.write_footnotes(self.top)
 
         self.write_referenced()
         print(f"{len(self.referenced)} references used.")
@@ -329,7 +329,7 @@ class Compiler:
         if self.paragraph_number:
             print(f"{self.paragraph_number} paragraphs.")
 
-        filename = filename or self.main.filename.with_suffix(".docx")
+        filename = filename or self.top.filename.with_suffix(".docx")
         self.doc.save(filename)
 
     def write_text(self, text):

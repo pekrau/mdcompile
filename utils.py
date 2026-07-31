@@ -11,7 +11,7 @@ import yaml
 import constants
 
 
-def get_args(prog, default="main.md"):
+def get_args(prog, default="index.md"):
     "Define the command-line argument parser and return the arguments."
     parser = argparse.ArgumentParser(prog=prog)
     parser.add_argument(
@@ -76,7 +76,7 @@ def get_args(prog, default="main.md"):
         "filename",
         nargs="?",
         default=default,
-        help="Main Markdown file to convert. Default 'main.md'.",
+        help=f"Top Markdown file to convert. Default '{default}'.",
     )
     return parser.parse_args()
 
