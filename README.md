@@ -2,7 +2,7 @@ mdcompile
 =========
 
 Compile Markdown file(s) with extensions for hierachy, footnotes, indexed terms
-and references to DOCX, PDF or EPUB.
+and references to DOCX or PDF.
 
 ```
 usage: mdc [-h] [-o OUTPUT_FILENAME] [-r REFS_DIRNAME] [-s | -v] [-c] [-p]
@@ -10,7 +10,7 @@ usage: mdc [-h] [-o OUTPUT_FILENAME] [-r REFS_DIRNAME] [-s | -v] [-c] [-p]
            [input_filename]
 
 Compile Markdown file(s) with extensions for hierachy, footnotes, indexed terms
-and references to DOCX, PDF or EPUB.
+and references to DOCX or PDF.
 
 positional arguments:
   input_filename        Name of Markdown file to compile. Default: 'main.md'.
@@ -19,7 +19,7 @@ options:
   -h, --help            show this help message and exit
   -o OUTPUT_FILENAME, --output_filename OUTPUT_FILENAME
                         Name of the output file. Its extension determines the
-                        format (docx, pdf or epub). Default: 'main.docx'.
+                        format (docx or pdf). Default: 'main.docx'.
   -r REFS_DIRNAME, --refs_dirname REFS_DIRNAME
                         Directory containing the YAML files for references
                         (articles, books). Default

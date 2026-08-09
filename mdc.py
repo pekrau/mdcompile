@@ -1,5 +1,5 @@
 """Compile Markdown file(s) with extensions for hierachy, footnotes, indexed terms
-and references to DOCX, PDF or EPUB.
+and references to DOCX or PDF.
 """
 
 # For debugging.
@@ -31,7 +31,7 @@ def get_cli_parser(default_filename="main"):
         "-o",
         "--output_filename",
         default=f"{default_filename}.docx",
-        help=f"Name of the output file. Its extension determines the format (docx, pdf or epub). Default: '{default_filename}.docx'.",
+        help=f"Name of the output file. Its extension determines the format (docx or pdf). Default: '{default_filename}.docx'.",
     )
     try:
         default_refs_dirname = os.environ["REFERENCES"]
@@ -57,12 +57,6 @@ def get_cli_parser(default_filename="main"):
         help="Output more execution information.",
     )
     parser.add_argument(
-        "-c",
-        "--comments",
-        action="store_true",
-        help="Write comments.",
-    )
-    parser.add_argument(
         "-p",
         "--paragraph-numbers",
         action="store_true",
@@ -83,7 +77,6 @@ def main(
     refs_dirname,
     silent,
     verbose,
-    comments,
     paragraph_numbers,
     README,
 ):
@@ -102,16 +95,17 @@ def main(
     format = pathlib.Path(output_filename).suffix.lstrip(".")
     match format:
         case "docx":
-            compiler = DocxCompiler(
-                main, refs_dir, comments=comments, paragraph_numbers=paragraph_numbers
-            )
-            pass
-        case "pdf":
-            raise NotImplementedError(f"format {format}")
-        case "epub":
-            raise NotImplementedError(f"format {format}")
+            compiler = DocxCompiler(main, refs_dir, paragraph_numbers=paragraph_numbers)
         case _:
             raise NotImplementedError(f"format {format}")
+
+    compiler.preprocess()
+    if not silent:
+        print(f"Footnotes at end of {compiler.footnotes_location}.")
+        print(f"{len(compiler.referenced)} references used.")
+        print(f"{len(compiler.indexed)} terms indexed.")
+        if paragraph_numbers:
+            print(f"{compiler.paragraph_number} paragraphs.")
 
     compiler.write(output_filename)
     if not silent:
@@ -124,7 +118,7 @@ def main(
             for subtext in main:
                 if subtext is main:
                     continue
-                outfile.write("  " * len(subtext.ordinal))
+                outfile.write(" " * 3 * len(subtext.ordinal))
                 outfile.write(f"{subtext.ordinal[-1]}. {subtext.title}\n\n")
         if not silent:
             print("'README.md' written.")

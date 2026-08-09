@@ -9,7 +9,6 @@ import marko.inline
 import marko.helpers
 
 import constants
-import utils
 
 
 class Subscript(marko.inline.InlineElement):
@@ -100,23 +99,6 @@ class ReferenceRenderer:
         return f'<strong><a href="/refs/view/{element.id}">{element.name}</a></strong>'
 
 
-class Comment(marko.inline.InlineElement):
-    "Markdown extension for comment."
-
-    pattern = re.compile(r"\[!(.+?)\]")
-    parse_children = False
-
-    def __init__(self, match):
-        self.comment = match.group(1).strip()
-
-
-class CommentRenderer:
-    "Output a the comment text."
-
-    def render_comment(self, element):
-        return f'<span class="comment">{element.comment}</span>'
-
-
 class ThematicBreakRenderer:
     "Thematic break before a paragraph."
 
@@ -130,7 +112,7 @@ def to_ast(content):
     converter.use("footnote")
     converter.use(
         marko.helpers.MarkoExtension(
-            elements=[Subscript, Superscript, Emdash, Indexed, Reference, Comment],
+            elements=[Subscript, Superscript, Emdash, Indexed, Reference],
         )
     )
     ast = converter.convert(content)
@@ -151,7 +133,6 @@ def to_html(content):
                 Emdash,
                 Indexed,
                 Reference,
-                Comment,
             ],
             renderer_mixins=[
                 SubscriptRenderer,
@@ -159,7 +140,6 @@ def to_html(content):
                 EmdashRenderer,
                 IndexedRenderer,
                 ReferenceRenderer,
-                CommentRenderer,
                 ThematicBreakRenderer,
             ],
         )

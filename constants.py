@@ -2,7 +2,7 @@
 
 import string
 
-VERSION = (0, 3, 0)
+VERSION = (0, 3, 1)
 __version__ = ".".join([str(n) for n in VERSION])
 
 EM_DASH = "\u2014"
@@ -29,6 +29,25 @@ REFS_LINKS = dict(
     isbn=("ISBN", "https://isbnsearch.org/isbn/{value}"),
 )
 
+SV_SE = "sv-SE"
+EN_GB = "en-GB"
+EN_US = "en-US"
+LANGUAGES = [SV_SE, EN_GB, EN_US]
+
+LEXICON = {
+    SV_SE: {  # Key: 'en-GB' term; value: 'sv-SE' term.
+        "created": "skapad",
+        "latest modification": "senast ändrad",
+        "contents": "innehåll",
+        "references": "referenser",
+        "index": "register",
+        "footnotes": "fotnoter",
+    }
+}
+for k, v in list(LEXICON[SV_SE].items()):  # 'list': Avoid update collision issues.
+    if k.lower() == k:  # If not lower-case, then explicit case.
+        LEXICON[SV_SE][k.capitalize()] = v.capitalize()
+
 DOCX_MAX_PAGE_BREAK_LEVEL = 4
 DOCX_MAX_TOC_LEVEL = 4
 DOCX_TOC_INDENT = 15
@@ -53,21 +72,34 @@ DOCX_INDEXED_SPACE_AFTER = 8
 DOCX_DEFAULT_IMAGE_SCALE_FACTOR = 0.6
 DOCX_DEFAULT_PNG_RENDERING_FACTOR = 2.0
 
-SV_SE = "sv-SE"
-EN_GB = "en-GB"
-EN_US = "en-US"
-LANGUAGES = [SV_SE, EN_GB, EN_US]
+PDF_NORMAL_FONT = "Helvetica"
+PDF_NORMAL_FONT_SIZE = 12
+PDF_NORMAL_LEADING = 17
+PDF_NORMAL_SPACE_BEFORE = 6
+PDF_NORMAL_SPACE_AFTER = 6
+PDF_TITLE_FONT_SIZE = 24
+PDF_TITLE_LEADING = 30
+PDF_TITLE_SPACE_AFTER = 15
+PDF_CODE_FONT = "Courier"
+PDF_CODE_FONT_SIZE = 11
+PDF_CODE_LEADING = 12
+PDF_CODE_INDENT = 10
+PDF_QUOTE_FONT = "Times-Roman"
+PDF_QUOTE_FONT_SIZE = 11
+PDF_QUOTE_LEADING = 14
+PDF_QUOTE_SPACE_BEFORE = 6
+PDF_QUOTE_INDENT = 28
+PDF_SYNOPSIS_SPACE_AFTER = 15
+PDF_SYNOPSIS_INDENT = 28
+PDF_FOOTNOTE_INDENT = 10
+PDF_REFERENCE_SPACE_BEFORE = 7
+PDF_REFERENCE_INDENT = 10
 
-LEXICON = {
-    SV_SE: {  # Key: 'en-GB' term; value: 'sv-SE' term.
-        "created": "skapad",
-        "latest modification": "senast ändrad",
-        "contents": "innehåll",
-        "references": "referenser",
-        "index": "register",
-        "footnotes": "fotnoter",
-    }
-}
-for k, v in list(LEXICON[SV_SE].items()):  # 'list': Avoid update collision issues.
-    if k.lower() == k:  # If not lower-case, then explicit case.
-        LEXICON[SV_SE][k.capitalize()] = v.capitalize()
+# PDF_MAX_PAGE_BREAK_LEVEL = 4
+# PDF_MAX_TOC_LEVEL = 4
+# PDF_TOC_INDENT = 15
+# PDF_TOC_FONT_SIZE = 10
+# PDF_TOC_LEADING = 11
+# PDF_IMAGE_SPACE = 12
+# PDF_DEFAULT_IMAGE_SCALE_FACTOR = 0.6
+# PDF_DEFAULT_PNG_RENDERING_FACTOR = 2.0
