@@ -1,4 +1,4 @@
-"""Compile Markdown files with extensions for hierachy, footnotes, indexed terms
+"""Compile Markdown file(s) with extensions for hierachy, footnotes, indexed terms
 and references to DOCX, PDF or EPUB.
 """
 
@@ -48,13 +48,13 @@ def get_cli_parser(default_filename="main"):
         "-s",
         "--silent",
         action="store_true",
-        help="Output no execution data.",
+        help="Output no execution information.",
     )
     group.add_argument(
         "-v",
         "--verbose",
         action="store_true",
-        help="Output more execution data.",
+        help="Output more execution information.",
     )
     parser.add_argument(
         "-c",
@@ -72,7 +72,7 @@ def get_cli_parser(default_filename="main"):
         "-R",
         "--README",
         action="store_true",
-        help="Write out a README.md file.",
+        help="Write out a 'README.md' file.",
     )
     return parser
 
@@ -114,6 +114,8 @@ def main(
             raise NotImplementedError(f"format {format}")
 
     compiler.write(output_filename)
+    if not silent:
+        print(f"'{output_filename}' written.")
 
     if README:
         with open("README.md", "w") as outfile:
@@ -122,8 +124,10 @@ def main(
             for subtext in main:
                 if subtext is main:
                     continue
-                outfile.write(".".join([str(i) for i in subtext.ordinal]))
-                outfile.write(f". {subtext.title}\n\n")
+                outfile.write("  " * len(subtext.ordinal))
+                outfile.write(f"{subtext.ordinal[-1]}. {subtext.title}\n\n")
+        if not silent:
+            print("'README.md' written.")
 
     if verbose:
         print(f"CPU time: {time.perf_counter() - start_time:.3f}s")

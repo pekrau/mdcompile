@@ -1,4 +1,4 @@
-"Compile Markdown files with footnotes, indexed terms and references to DOCX book."
+"Compile Markdown file(s) with footnotes, indexed terms and references to DOCX book."
 
 import datetime as dt
 
