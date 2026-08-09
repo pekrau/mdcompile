@@ -1,14 +1,6 @@
 "Compile Markdown files with footnotes, indexed terms and references to DOCX book."
 
-import argparse
 import datetime as dt
-import os
-import sys
-
-# For debugging.
-import icecream
-
-icecream.install()
 
 import docx
 import docx.oxml
@@ -21,64 +13,31 @@ from text import Text
 import utils
 
 
-class Compiler:
+class DocxCompiler:
     "Compile to DOCX format document."
 
     def __init__(
-        self,
-        filename,
-        references=None,
-        language=None,
-        toc_level=None,
-        page_break_level=None,
-        text_number_level=None,
-        no_comments=False,
-        footnotes_location=None,
-        paragraph_numbers=False,
-        debug=False,
+        self, text, refs_dir, comments=False, paragraph_numbers=False, silent=False
     ):
-        self.top = Text(filename, debug=debug)
-        print(f"{len(self.top)} texts.")
+        self.main = text
+        self.refs_dir = refs_dir
 
-        # Set the references directory.
-        if references is None:
-            try:
-                references = os.environ["REFERENCES"]
-            except KeyError:
-                references = "./references"
-        try:
-            self.references = utils.ReferencesDir(references)
-        except IOError:
-            sys.exit(f"Error: no such reference directory '{references}'")
-
-        # Set output parameters
-        self.language = language or self.top.frontmatter.get(
-            "language", constants.SV_SE
-        )
-        self.tx = utils.Tx(self.language)
-        if toc_level is None:
-            self.toc_level = self.top.frontmatter.get("toc-level", 1)
-        else:
-            self.toc_level = toc_level
-        if page_break_level is None:
-            self.page_break_level = self.top.frontmatter.get("page-break-level", 1)
-        else:
-            self.page_break_level = page_break_level
-        if text_number_level is None:
-            self.text_number_level = self.top.frontmatter.get("text-number-level", 1)
-        else:
-            self.text_number_level = text_number_level
-        if no_comments:
-            self.output_comments = False
-        else:
-            self.output_comments = self.top.frontmatter.get("output-comments", True)
-        if paragraph_numbers or self.top.frontmatter.get("paragraph-numbers", False):
+        # Output parameters from arguments.
+        self.comments = comments
+        if paragraph_numbers:
             self.paragraph_number = 0
         else:
             self.paragraph_number = None
-        self.footnotes_location = footnotes_location or self.top.frontmatter.get(
-            "footnotes-location", constants.FOOTNOTES_TEXT
-        )
+        self.silent = silent
+
+        # Output parameters from main text frontmatter.
+        fm = self.main.frontmatter
+        self.language = fm.get("language", constants.SV_SE)
+        self.tx = utils.Tx(self.language)
+        self.toc_level = fm.get("toc-level", 1)
+        self.page_break_level = fm.get("page-break-level", 1)
+        self.section_number_level = fm.get("text-number-level", 1)
+        self.footnotes_location = fm.get("footnotes-location", constants.FOOTNOTES_TEXT)
 
     def write(self, filename=None):
         "Convert the top text and its subtexts, if any, into DOCX."
@@ -105,7 +64,7 @@ class Compiler:
         section.header_distance = docx.shared.Mm(12.7)
         section.footer_distance = docx.shared.Mm(12.7)
 
-        # Create or modify styles to be used in the document.
+        # Create or modify styles to be used in the DOCX document.
         style = self.doc.styles.add_style("Title 0", WD_STYLE_TYPE.PARAGRAPH)
         style.base_style = self.doc.styles["Title"]
         style.font.name = constants.DOCX_NORMAL_FONT
@@ -161,19 +120,19 @@ class Compiler:
         style = self.doc.styles["Footer"]
         style.font.size = docx.shared.Pt(constants.DOCX_FOOTER_FONT_SIZE)
 
-        # Define the footer contents.
+        # Define the DOCX footer contents.
         section.footer.paragraphs[0].text = (
-            f"{self.tx('Created')}: {utils.isoformat()}\t{self.tx('Latest modification')}: {utils.isoformat(self.top.modified)}"
+            f"{self.tx('Created')}: {utils.isoformat()}\t{self.tx('Latest modification')}: {utils.isoformat(self.main.modified)}"
         )
 
         # Set Dublin core metadata.
-        self.doc.core_properties.author = ", ".join(self.top.authors)
+        self.doc.core_properties.author = ", ".join(self.main.authors)
         self.doc.core_properties.created = dt.datetime.now()
-        self.doc.core_properties.modified = self.top.modified
+        self.doc.core_properties.modified = self.main.modified
         if self.language:
             self.doc.core_properties.language = self.language
 
-        # Display page number in the header.
+        # Display page number in the DOCX header.
         # https://stackoverflow.com/questions/56658872/add-page-number-using-python-docx
         paragraph = self.doc.sections[-1].header.paragraphs[0]
         paragraph.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.RIGHT
@@ -191,19 +150,14 @@ class Compiler:
 
         # Go through all elements in all texts to collect referenced and indexed.
         self.referenced = {}
-        for text in self.top:
+        for text in self.main:
             for element in text.elements():
                 if element["element"] != "reference":
                     continue
                 if element["name"] not in self.referenced:
-                    try:
-                        self.referenced[element["name"]] = self.references[
-                            element["name"]
-                        ]
-                    except KeyError:
-                        sys.exit(f"Error: no such reference: '{element['name']}'")
+                    self.referenced[element["name"]] = self.refs_dir[element["name"]]
         self.indexed = {}
-        for text in self.top:
+        for text in self.main:
             for element in text.elements():
                 if element["element"] != "indexed":
                     continue
@@ -212,14 +166,14 @@ class Compiler:
         # Transfer footnotes to the appropriate texts, and number them.
         match self.footnotes_location:
             case constants.FOOTNOTES_TEXT:
-                for text in self.top:
+                for text in self.main:
                     number = 0
                     for element in text.elements():
                         if element["element"] == "footnote_ref":
                             element["number"] = str(number := number + 1)
                             text.footnotes[element["label"]]["number"] = number
             case constants.FOOTNOTES_CHAPTER:
-                for chapter in self.top.subtexts:
+                for chapter in self.main.subtexts:
                     number = 0
                     for text in chapter:
                         for element in text.elements():
@@ -231,57 +185,58 @@ class Compiler:
                                 text.footnotes.keys()
                             )
                             if labels:
-                                sys.exit(
-                                    f"Error: footnote labels collision: {', '.join(labels)}"
+                                raise ValueError(
+                                    f"footnote labels collision: {', '.join(labels)}"
                                 )
                             chapter.footnotes.update(text.footnotes)
                             text.footnotes.clear()
             case constants.FOOTNOTES_BOOK:
                 number = 0
-                for text in self.top:
+                for text in self.main:
                     for element in text.elements():
                         if element["element"] == "footnote_ref":
                             element["number"] = str(number := number + 1)
                             text.footnotes[element["label"]]["number"] = number
-                    if text is not self.top:
-                        labels = set(self.top.footnotes.keys()).intersection(
+                    if text is not self.main:
+                        labels = set(self.main.footnotes.keys()).intersection(
                             text.footnotes.keys()
                         )
                         if labels:
-                            sys.exit(
-                                f"Error: footnote labels collision: {', '.join(labels)}"
+                            raise ValueError(
+                                f"footnote labels collision: {', '.join(labels)}"
                             )
-                        self.top.footnotes.update(text.footnotes)
+                        self.main.footnotes.update(text.footnotes)
                         text.footnotes.clear()
 
         # 0: not in footnote; -1: footnote started; >= 1: footnote number to start
         self.footnote_def_flag = 0
-        print(f"Footnotes at end of {self.footnotes_location}.")
+        if not self.silent:
+            print(f"Footnotes at end of {self.footnotes_location}.")
 
-        # Output title page.
+        # Write title page.
         paragraph = self.doc.add_paragraph(style="Title 0")
-        run = paragraph.add_run(self.top.title)
+        run = paragraph.add_run(self.main.title)
 
-        if self.top.subtitle:
+        if self.main.subtitle:
             paragraph = self.doc.add_paragraph(style="Title 1")
-            paragraph.add_run(self.top.subtitle)
+            paragraph.add_run(self.main.subtitle)
 
         # Split authors into runs to allow line break between them.
         paragraph = self.doc.add_paragraph(style="Title 2")
-        for author in self.top.authors:
+        for author in self.main.authors:
             paragraph.add_run(author)
-            if author != self.top.authors[-1]:
+            if author != self.main.authors[-1]:
                 paragraph.add_run(", ")
 
         # Title-page text; synopsis, or similar.
-        Renderer(self, self.top)
+        Renderer(self, self.main)
 
         # Write table of contents (TOC) page(s).
         # The DOCX format does not allow determining the page numbers before printing.
         if self.toc_level:
             self.doc.add_page_break()
             self.write_heading(self.tx("Contents"), 1)
-            for text in list(self.top)[1:]:  # Skip the top file; title page.
+            for text in list(self.main)[1:]:  # Skip the top file; title page.
                 if text.level > self.toc_level:
                     continue
                 paragraph = self.doc.add_paragraph(style="Body Text")
@@ -293,10 +248,10 @@ class Compiler:
                 )
                 paragraph.add_run(self.numbered_title(text))
 
-            # Output entries for book footnotes, references and indexed, if any such.
+            # Write entries for book footnotes, references and indexed, if any such.
             if (
                 self.footnotes_location == constants.FOOTNOTES_BOOK
-                and self.top.footnotes
+                and self.main.footnotes
             ):
                 self.doc.add_paragraph(self.tx("Footnotes"), style="Body Text")
             if self.referenced:
@@ -305,7 +260,7 @@ class Compiler:
                 self.doc.add_paragraph(self.tx("Index"), style="Body Text")
 
         # First-level subtexts are chapters.
-        for text in self.top.subtexts:
+        for text in self.main.subtexts:
             self.write_text(text)
             if (
                 self.footnotes_location == constants.FOOTNOTES_CHAPTER
@@ -318,22 +273,24 @@ class Compiler:
         if self.footnotes_location == constants.FOOTNOTES_BOOK:
             self.doc.add_page_break()
             self.write_heading(self.tx("Footnotes"), 1)
-            self.write_footnotes(self.top)
+            self.write_footnotes(self.main)
 
         self.write_referenced()
-        print(f"{len(self.referenced)} references used.")
+        if not self.silent:
+            print(f"{len(self.referenced)} references used.")
 
         self.write_indexed()
-        print(f"{len(self.indexed)} terms indexed.")
+        if not self.silent:
+            print(f"{len(self.indexed)} terms indexed.")
 
-        if self.paragraph_number:
+        if not self.silent and self.paragraph_number:
             print(f"{self.paragraph_number} paragraphs.")
 
-        filename = filename or self.top.filename.with_suffix(".docx")
+        filename = filename or self.main.filename.with_suffix(".docx")
         self.doc.save(filename)
 
     def write_text(self, text):
-        "Output the contents of the text instance."
+        "Write the contents of the text instance."
         if text.level <= self.page_break_level:
             self.doc.add_page_break()
         self.write_heading(self.numbered_title(text), text.level)
@@ -369,7 +326,7 @@ class Compiler:
 
     def numbered_title(self, text, force=False):
         "Return the title with a number prefix."
-        if text.level <= self.text_number_level or force:
+        if text.level <= self.section_number_level or force:
             return f"{'.'.join([str(i) for i in text.ordinal])}. {text.title}"
         else:
             return text.title
@@ -395,7 +352,7 @@ class Compiler:
             try:
                 method = getattr(self, f"write_reference_{reference['type']}")
             except AttributeError:
-                sys.exit(f"Error: unknown reference type {reference['type']}")
+                raise ValueError(f"unknown reference type {reference['type']}")
             else:
                 method(paragraph, reference)
             paragraph.add_run(".")
@@ -571,7 +528,7 @@ class Renderer:
         try:
             method = getattr(self, ast["element"])
         except AttributeError:
-            print("Could not handle ast", ast)
+            raise ValueError(f"renderer could not handle ast {ast}")
         else:
             method(ast)
 
@@ -686,13 +643,13 @@ class Renderer:
             if urllib.parse.urlparse(ast["dest"]).scheme:
                 response = requests.get(ast["dest"])
                 if response.status_code != HTTP.OK:
-                    raise ValueError(f"Could not fetch image '{ast['dest']}'")
+                    raise ValueError(f"could not fetch image '{ast['dest']}'")
                 if response.headers["Content-Type"] not in (
                     constants.PNG_MIMETYPE,
                     constants.JPEG_MIMETYPE,
                 ):
                     raise ValueError(
-                        f"Cannot handle image '{ast['dest']}' with content type '{response.headers['Content-Type']}'"
+                        f"cannot handle image '{ast['dest']}' with content type '{response.headers['Content-Type']}'"
                     )
                 self.add_image(response.content, ast, 1.0)
 
@@ -741,9 +698,9 @@ class Renderer:
                         base64.standard_b64decode(img["data"]), ast, scale_factor
                     )
                 else:
-                    raise ValueError(f"Cannot handle image {img['content_type']}")
+                    raise ValueError(f"cannot handle image {img['content_type']}")
             else:
-                raise ValueError(f"No such image '{ast['dest']}'")
+                raise ValueError(f"no such image '{ast['dest']}'")
 
         except ValueError as error:
             self.current_paragraph = self.doc.add_paragraph(style="Code")
@@ -850,17 +807,10 @@ class Renderer:
         run.font.bold = True
 
     def comment(self, ast):
-        if self.output_comments:
+        if self.comments:
             run = self.current_paragraph.add_run(ast["comment"])
             run.font.bold = True
             run.font.highlight_color = docx.enum.text.WD_COLOR_INDEX.YELLOW
 
     def link_ref_def(self, ast):
         pass
-
-
-if __name__ == "__main__":
-    args = utils.get_args("todocx")
-    print(f"todocx {constants.__version__}: Compile Markdown files to docx.")
-    compiler = Compiler(**vars(args))
-    compiler.write()

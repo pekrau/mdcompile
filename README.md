@@ -4,33 +4,29 @@ Compile Markdown files with footnotes, indexed terms and references to
 DOCX or PDF book.
 
 ```
-usage: todocx [-h] [-r REFERENCES] [-l {sv-SE,en-GB,en-US}] [-t TOC_LEVEL]
-              [-b PAGE_BREAK_LEVEL] [-n TEXT_NUMBER_LEVEL] [--no-comments]
-              [-f {book,chapter,text}] [-p] [-d]
-              [filename]
+usage: mdc [-h] [-o OUTPUT_FILENAME] [-r REFS_DIRNAME] [-s | -v] [-c] [-p]
+           [-R]
+           [input_filename]
+
+Compile Markdown files with extensions for hierachy, footnotes, indexed terms
+and references to DOCX, PDF or EPUB.
 
 positional arguments:
-  filename              Top Markdown file to convert. Default 'index.md'.
+  input_filename        Name of Markdown file to compile. Default: 'main.md'.
 
 options:
   -h, --help            show this help message and exit
-  -r REFERENCES, --references REFERENCES
-                        Directory containing the references YAML files.
-                        Default: Environment variable REFERENCES if defined,
-                        else './references'.
-  -l {sv-SE,en-GB,en-US}, --language {sv-SE,en-GB,en-US}
-                        Language specification. Default 'sv-SE'.
-  -t TOC_LEVEL, --toc-level TOC_LEVEL
-                        Level for display in table of contents. Default 1.
-  -b PAGE_BREAK_LEVEL, --page-break-level PAGE_BREAK_LEVEL
-                        Level at which to break for a new page. Default 1.
-  -n TEXT_NUMBER_LEVEL, --text-number-level TEXT_NUMBER_LEVEL
-                        Level at which to output the number of the text.
-                        Default 1.
-  --no-comments         Do not output comments.
-  -f {book,chapter,text}, --footnotes-location {book,chapter,text}
-                        Location of footnotes. Default 'text'.
+  -o OUTPUT_FILENAME, --output_filename OUTPUT_FILENAME
+                        Name of the output file. Its extension determines the
+                        format (docx, pdf or epub). Default: 'main.docx'.
+  -r REFS_DIRNAME, --refs_dirname REFS_DIRNAME
+                        Directory containing the YAML files for references
+                        (articles, books). Default
+                        '/home/pekrau/Dropbox/pekrau.github.io/references'
+  -s, --silent          Output no execution data.
+  -v, --verbose         Output more execution data.
+  -c, --comments        Write comments.
   -p, --paragraph-numbers
-                        Output consecutive number for each paragraph.
-  -d, --debug           Debug mode; output Markdown AST to JSON file.
+                        Write consecutive number for each paragraph.
+  -R, --README          Write out a README.md file.
 ```

@@ -1,7 +1,6 @@
-"Frontmatter and text read from a Markdown (.md) file, possibly with subtexts."
+"Read frontmatter and text from a Markdown (.md) file, possibly with subtexts."
 
 import datetime as dt
-import json
 import pathlib
 import re
 
@@ -12,11 +11,11 @@ import constants
 
 
 class Text:
-    "Frontmatter and text read from a Markdown (.md) file, possibly with subtexts."
+    "Read frontmatter and text from a Markdown (.md) file, possibly with subtexts."
 
     FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)
 
-    def __init__(self, filename, supertext=None, ordinal=1, debug=False):
+    def __init__(self, filename, supertext=None, ordinal=1):
         "Read this Markdown file and any subtexts it specifies and convert into AST."
         self.filename = pathlib.Path(filename)
         self.supertext = supertext
@@ -33,10 +32,6 @@ class Text:
             self.frontmatter = {}
             self.text = content
         self.ast = markdown.to_ast(self.text)
-        if debug:
-            jsonfilename = self.filename.with_suffix(".json")
-            jsonfilename.write_text(json.dumps(self.ast, indent=2))
-            print(f"Wrote {jsonfilename}")
         # The link definitions are included in-place in the AST.
         # This item in the AST is redundant; remove.
         self.ast.pop("link_ref_defs", None)
@@ -45,9 +40,7 @@ class Text:
         # Read the subtexts, if any.
         self.subtexts = []
         for pos, filename in enumerate(self.frontmatter.get("subtexts", [])):
-            self.subtexts.append(
-                Text(filename, supertext=self, ordinal=pos + 1, debug=debug)
-            )
+            self.subtexts.append(Text(filename, supertext=self, ordinal=pos + 1))
 
     def __repr__(self):
         return f'Text("{self.filename}")'
@@ -108,6 +101,13 @@ class Text:
         "Return an iterator over the AST elements of this text."
         return AstIterator(self.ast)
 
+    def contents(self, indent=0):
+        "Return the title of this text, and the titles of the subtexts indented."
+        titles = [f'{" " * indent}{self.title}'] + [
+            t.contents(indent + 2) for t in self.subtexts
+        ]
+        return "\n".join(titles)
+
 
 class AstIterator:
 
@@ -123,11 +123,3 @@ class AstIterator:
                     yield from iter(AstIterator(ast))
         except KeyError:
             pass
-
-
-if __name__ == "__main__":
-    t = Text("main.md")
-    for t2 in list(t):
-        print("   ", t2, t2.ordinal)
-        # for e in t2.elements():
-        #     print(e["element"])

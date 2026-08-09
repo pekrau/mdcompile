@@ -1,84 +1,12 @@
 "Various utility functions."
 
-import argparse
 import datetime as dt
 import pathlib
-import string
 import unicodedata
 
 import yaml
 
 import constants
-
-
-def get_args(prog, default="index.md"):
-    "Define the command-line argument parser and return the arguments."
-    parser = argparse.ArgumentParser(prog=prog)
-    parser.add_argument(
-        "-r",
-        "--references",
-        default=None,
-        help="Directory containing the references YAML files. Default: Environment variable REFERENCES if defined, else './references'.",
-    )
-    parser.add_argument(
-        "-l",
-        "--language",
-        choices=constants.LANGUAGES,
-        default=None,
-        help=f"Language specification. Default '{constants.SV_SE}'.",
-    )
-    parser.add_argument(
-        "-t",
-        "--toc-level",
-        type=int,
-        default=None,
-        help="Level for display in table of contents. Default 1.",
-    )
-    parser.add_argument(
-        "-b",
-        "--page-break-level",
-        type=int,
-        default=None,
-        help="Level at which to break for a new page. Default 1.",
-    )
-    parser.add_argument(
-        "-n",
-        "--text-number-level",
-        type=int,
-        default=None,
-        help="Level at which to output the number of the text. Default 1.",
-    )
-    parser.add_argument(
-        "--no-comments",
-        action="store_true",
-        help="Do not output comments.",
-    )
-    parser.add_argument(
-        "-f",
-        "--footnotes-location",
-        choices=constants.FOOTNOTES_LOCATIONS,
-        default=None,
-        help=f"Location of footnotes. Default '{constants.FOOTNOTES_TEXT}'.",
-    )
-    parser.add_argument(
-        "-p",
-        "--paragraph-numbers",
-        action="store_true",
-        help="Output consecutive number for each paragraph.",
-    )
-    parser.add_argument(
-        "-d",
-        "--debug",
-        action="store_true",
-        help="Debug mode; output Markdown AST to JSON file.",
-    )
-    parser.add_argument(
-        "filename",
-        nargs="?",
-        default=default,
-        help=f"Top Markdown file to convert. Default '{default}'.",
-    )
-    return parser.parse_args()
 
 
 def normalize(s):
