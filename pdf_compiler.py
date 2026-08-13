@@ -11,8 +11,13 @@ from reportlab.platypus.doctemplate import LayoutError
 from reportlab.platypus.tables import *
 from reportlab.platypus.tableofcontents import TableOfContents, SimpleIndex
 
+import constants
+from compiler import Compiler
+from text import Text
+import utils
 
-class PdfCompiler:
+
+class PdfCompiler(Compiler):
     "Compile to PDF format."
 
     def write(self, filename=None):
@@ -62,17 +67,9 @@ class PdfCompiler:
         )
         self.stylesheet.add(
             ParagraphStyle(
-                name="Synopsis",
-                parent=self.stylesheet["Normal"],
-                spaceAfter=constants.PDF_SYNOPSIS_SPACE_AFTER,
-                leftIndent=constants.PDF_SYNOPSIS_INDENT,
-                rightIndent=constants.PDF_SYNOPSIS_INDENT,
-            )
-        )
-        self.stylesheet.add(
-            ParagraphStyle(
                 name="Footnote",
                 parent=self.stylesheet["Normal"],
+                spaceBefore=constants.PDF_FOOTNOTE_SPACE_BEFORE,
                 leftIndent=constants.PDF_FOOTNOTE_INDENT,
                 firstLineIndent=-constants.PDF_FOOTNOTE_INDENT,
             )
@@ -98,123 +95,180 @@ class PdfCompiler:
         self.stylesheet["Normal"].spaceBefore = constants.PDF_NORMAL_SPACE_BEFORE
         self.stylesheet["Normal"].spaceAfter = constants.PDF_NORMAL_SPACE_AFTER
 
-        # Key: fulltitle; value: dict(label, number, ast_children)
-        self.footnotes = {}
-        # References identifiers.
-        self.referenced = set()
-
-        self.current_text = None
+        # Document contents.
         self.flowables = []
-        self.list_stack = []
-        self.index = SimpleIndex(style=self.stylesheet["Index"], headers=False)
-        self.any_indexed = False
 
-    def write_section(self, section, level):
-        if section.status == constants.OMITTED:
-            return
-        if level <= self.page_break_level:
-            self.add_pagebreak()
-        self.add_heading(section.heading, level, anchor=section.ordinal)
-        if section.subtitle:
-            self.add_heading(section.subtitle, level + 1)
-        if section.synopsis:
-            self.add_paragraph("<i>" + section.synopsis + "</i>", "Synopsis")
+        # Write title page: title, subtitle, initial note, authors, dates.
+        self.write_paragraph(self.main.title, "Title")
+        self.flowables.append(
+            HRFlowable(width="100%", color=reportlab.lib.colors.black, spaceAfter=20)
+        )
+        if self.main.subtitle:
+            self.write_heading(self.main.subtitle, 1)
 
-        self.current_text = section
-        self.render(section.ast)
+        for author in self.main.authors:
+            self.write_heading(", ".join(self.main.authors), 2)
 
-        if self.footnotes_location == constants.FOOTNOTES_EACH_TEXT:
-            self.write_text_footnotes(section)
+        self.flowables.append(Spacer(0, 28))
+        self.text_render(self.main)
 
-        for item in section.items:
-            if item.is_section:
-                self.write_section(item, level=level + 1)
+        self.flowables.append(Spacer(0, 28))
+        self.write_preformatted(
+            f'{self.tx("Created")}: {utils.isoformat()}\n'
+            f'{self.tx("Latest modification")}: {utils.isoformat(self.main.modified)}',
+            stylename="Italic",
+        )
+
+        # Write table of contents (TOC) page(s).
+        if self.toc_level and self.main.subtexts:
+            self.write_page_break()
+            self.write_heading(self.tx("Contents"), 1)
+            # Define the TOC level styles.
+            toc_level_styles = []
+            for level in range(0, constants.PDF_MAX_TOC_LEVEL + 1):
+                style = ParagraphStyle(
+                    name=f"TOC level {level}",
+                    fontName=constants.PDF_NORMAL_FONT,
+                    fontSize=constants.PDF_TOC_FONT_SIZE,
+                    leading=constants.PDF_TOC_LEADING,
+                    firstLineIndent=constants.PDF_TOC_INDENT * level,
+                    leftIndent=constants.PDF_TOC_INDENT * (level + 1),
+                )
+                toc_level_styles.append(style)
+            self.toc = TableOfContents(
+                dotsMinLevel=-1,
+                levelStyles=toc_level_styles,
+                notifyKind="TOCEntry",
+            )
+            self.flowables.append(self.toc)
+        else:
+            self.toc = None
+
+        # First-level subtexts are chapters.
+        for text in self.main.subtexts:
+            self.write_text(text)
+            if self.footnotes_location == constants.FOOTNOTES_CHAPTER:
+                if text.footnotes:
+                    self.write_page_break()
+                    self.write_heading(self.tx("Footnotes"), 3)
+                    self.write_footnotes(text)
+
+        if self.footnotes_location == constants.FOOTNOTES_BOOK:
+            if self.main.footnotes:
+                self.write_page_break()
+                self.write_heading(self.tx("Footnotes"), 1, anchor="footnotes")
+                self.write_footnotes(self.main)
+
+        self.write_referenced()
+        simple_index = self.write_indexed()
+
+        filename or self.main.filename.with_suffix(".pdf")
+        with open(filename, "wb") as outfile:
+            if self.toc is not None:
+                document = TocDocTemplate(
+                    outfile,
+                    toc_level=self.toc_level,
+                    title=self.main.title,
+                    author=", ".join(self.main.authors) or None,
+                    creator=f"mdcompile {constants.__version__}",
+                    lang=self.language,
+                )
+
+                if self.indexed:
+                    document.multiBuild(
+                        self.flowables,
+                        onLaterPages=self.display_page_number,
+                        canvasmaker=simple_index.getCanvasMaker(),
+                    )
+                else:
+                    document.multiBuild(
+                        self.flowables, onLaterPages=self.display_page_number
+                    )
             else:
-                self.write_text(item, level=level + 1)
+                document = SimpleDocTemplate(
+                    outfile,
+                    title=self.main.title,
+                    author=", ".join(self.main.authors) or None,
+                    creator=f"mdcompile {constants.__version__}",
+                    lang=self.language,
+                )
+                if self.indexed:
+                    document.build(
+                        self.flowables,
+                        onLaterPages=self.display_page_number,
+                        canvasmaker=simple_index.getCanvasMaker(),
+                    )
+                else:
+                    document.build(
+                        self.flowables, onLaterPages=self.display_page_number
+                    )
 
-    def write_text(self, text, level):
-        if text.status == constants.OMITTED:
-            return
-        if level <= self.page_break_level:
-            self.add_pagebreak()
-        if not text.frontmatter.get("suppress_title"):
-            self.add_heading(text.heading, level, anchor=text.ordinal)
-            if text.subtitle:
-                self.add_heading(text.subtitle, level + 1)
-        if text.synopsis:
-            self.add_paragraph("<i>" + text.synopsis + "</i>", "Synopsis")
+    def write_text(self, text):
+        if text.level <= self.page_break_level:
+            self.write_page_break()
+        if text.level <= self.toc_level:
+            anchor = text.ordinal
+        else:
+            anchor = None
+        self.write_heading(self.numbered_title(text), text.level, anchor=anchor)
+        if text.subtitle:
+            self.write_heading(text.subtitle, text.level + 1)
 
-        self.current_text = text
-        self.render(text.ast)
+        self.text_render(text)
 
-        if self.footnotes_location == constants.FOOTNOTES_EACH_TEXT:
-            self.write_text_footnotes(text)
+        if self.footnotes_location == constants.FOOTNOTES_TEXT and text.footnotes:
+            self.write_heading(self.tx("Footnotes"), text.level + 2)
+            self.write_footnotes(text)
 
-    def write_text_footnotes(self, text):
-        "Footnote definitions at the end of each text."
-        assert self.footnotes_location == constants.FOOTNOTES_EACH_TEXT
-        try:
-            footnotes = self.footnotes[text.fulltitle]
-        except KeyError:
-            return
-        self.add_heading(Tx("Footnotes"), constants.MAX_LEVEL)
-        for entry in sorted(footnotes.values(), key=lambda e: e["number"]):
-            self.within_footnote = f"<b>{entry['number']}.</b> "
-            for child in entry["ast_children"]:
+        for subtext in text.subtexts:
+            self.write_text(subtext)
+
+    def write_paragraph(self, text, stylename="Normal"):
+        self.flowables.append(Paragraph(text, style=self.stylesheet[stylename]))
+
+    def write_preformatted(self, text, stylename="Normal"):
+        self.flowables.append(Preformatted(text, style=self.stylesheet[stylename]))
+
+    def write_heading(self, heading, level, anchor=None):
+        """Add heading given the level.
+        If the anchor is given, create TOC entry and anchor.
+        """
+        level = min(level, constants.MAX_LEVEL)
+        if anchor:
+            if level <= self.toc_level:
+                self.flowables.append(TocMarker(level - 1, heading, anchor))
+            heading = f'<a name="__anchor__{anchor}"/>' + heading
+        self.write_paragraph(heading, stylename=f"Heading{level}")
+
+    def write_page_break(self):
+        self.flowables.append(NotAtTopPageBreak())
+
+    def write_footnotes(self, text):
+        "Write out the footnotes for the text."
+        for footnote in sorted(text.footnotes.values(), key=lambda f: f["number"]):
+            self.footnote_def_flag = footnote["number"]
+            for child in footnote["children"]:
                 self.render(child)
-            self.within_footnote = False
+            self.footnote_def_flag = 0
 
-    def write_chapter_footnotes(self, item):
-        "Footnote definitions at the end of a chapter; i.e. top-level section."
-        assert self.footnotes_location == constants.FOOTNOTES_EACH_CHAPTER
-        try:
-            footnotes = self.footnotes[item.chapter.fulltitle]
-        except KeyError:
+    def write_referenced(self):
+        "Write the referenced pages, if any."
+        if not self.referenced:
             return
-        self.add_pagebreak()
-        self.add_heading(Tx("Footnotes"), int(constants.MAX_LEVEL / 2))
-        for entry in sorted(footnotes.values(), key=lambda e: e["number"]):
-            self.within_footnote = f"<b>{entry['number']}.</b> "
-            for child in entry["ast_children"]:
-                self.render(child)
-            self.within_footnote = False
-
-    def write_book_footnotes(self):
-        "Footnote definitions as a separate section at the end of the book."
-        assert self.footnotes_location == constants.FOOTNOTES_END_OF_BOOK
-        self.add_pagebreak()
-        self.add_heading(Tx("Footnotes"), 1, anchor="footnotes")
-        for item in self.book.items:
-            footnotes = self.footnotes.get(item.fulltitle, {})
-            if not footnotes:
-                continue
-            self.add_heading(item.heading, 2)
-            for entry in sorted(footnotes.values(), key=lambda e: e["number"]):
-                self.within_footnote = f"<b>{entry['number']}.</b> "
-                for child in entry["ast_children"]:
-                    self.render(child)
-                self.within_footnote = False
-
-    def write_references(self):
-        "Write the references pages."
-        assert self.referenced
-        self.add_pagebreak()
-        self.add_heading(Tx("References"), 1, anchor="references")
-        for refid in sorted(self.referenced):
+        self.write_page_break()
+        self.write_heading(self.tx("References"), 1, anchor="references")
+        for name, reference in sorted(self.referenced.items()):
             self.para_push("Reference")
-            try:
-                reference = self.references[refid]
-            except Error:
-                continue
-            self.para_text(f'<a name="{reference["id"]}"/><b>{reference["name"]}</b>')
+            self.para_text(f'<a name="{name}"/><b>{name}</b>')
             self.para_text('<span size="40"> </span>')
             self.write_reference_authors(reference)
             try:
                 method = getattr(self, f"write_reference_{reference['type']}")
             except AttributeError:
-                print("unknown", reference["type"])
+                raise ValueError(f"unknown reference type {reference['type']}")
             else:
                 method(reference)
+            self.para_text(".")
             self.write_reference_external_links(reference)
             self.para_pop()
 
@@ -226,100 +280,117 @@ class PdfCompiler:
                     self.para_text(" & ")
                 else:
                     self.para_text(", ")
-            self.para_text(utils.short_person_name(author))
+            self.para_text(author)
+        self.para_text(": ")
 
     def write_reference_article(self, reference):
         "Write data for reference of type 'article'."
-        self.para_text(f' ({reference["year"]})')
-        self.para_text(f" {reference.reftitle}")
-        journal = reference.get("journal")
-        if journal:
+        self.para_text(reference["title"])
+        self.para_text(",")
+        if journal := reference.get("journal"):
             self.para_text(f" <i>{journal}</i>")
-        try:
-            self.para_text(f" {reference['volume']}")
-        except KeyError:
-            pass
-        else:
-            try:
-                self.para_text(f" ({reference['number']})")
-            except KeyError:
-                pass
-        try:
-            self.para_text(f": pp. {reference['pages'].replace('--', '-')}.")
-        except KeyError:
-            pass
+        if volume := reference.get("volume"):
+            self.para_text(f" <b>{volume}</b>")
+        if issue := reference.get("issue"):
+            self.para_text(f" ({issue})")
+        if pages := reference.get("pages"):
+            self.para_text(" ")
+            self.para_text(pages.replace("--", "-"))
 
     def write_reference_book(self, reference):
         "Write data for reference of type 'book'."
-        self.para_text(f' ({reference["year"]}).')
-        self.para_text(f" <i>{reference.reftitle}</i>")
-        try:
-            self.para_text(f" {reference['publisher']}")
-        except KeyError:
-            pass
-        try:
-            self.para_text(f", {reference['edition_published']}")
-        except KeyError:
-            pass
+        self.para_text(f"<i>{reference['title']}</i>")
+        if edition := reference.get("edition"):
+            self.para_text(",")
+            if publisher := edition.get("publisher"):
+                self.para_text(" ")
+                self.para_text(publisher)
+            if published := edition.get("published"):
+                self.para_text(" ")
+                self.para_text(published)
 
     def write_reference_link(self, reference):
         "Write data for reference of type 'link'."
-        self.para_text(f' ({reference["year"]})')
-        self.para_text(f" {reference.reftitle}")
-        try:
+        self.para_text(f" {reference['title']}")
+        if url := reference.get("url"):
             self.para_text(
-                f' <link href="{reference["url"]}" underline="true" color="blue">{reference["url"]}</link>'
+                f' <link href="{url}" underline="true" color="blue">{url}</link>'
             )
-        except KeyError:
-            pass
-        else:
-            try:
-                self.para_text(f" (accessed {reference['accessed']})")
-            except KeyError:
-                pass
+            if accessed := reference.get("accessed"):
+                self.para_text(f" ({self.tx('accessed')} {accessed})")
 
     def write_reference_external_links(self, reference):
         "Write external links; doi, pmid, isbn, ..."
-        links = []
+        if url := reference.get("url"):
+            self.para_text(
+                f' <link href="{url}" underline="true" color="royalblue">{url}</link>'
+            )
         for key, (label, template) in constants.REFS_LINKS.items():
             try:
                 value = reference[key]
                 text = f"{label}:{value}"
                 url = template.format(value=value)
-                links.append((text, url))
+                self.para_text(
+                    f' <link href="{url}" underline="true" color="royalblue">{text}</link>'
+                )
             except KeyError:
                 pass
-        if not links:
-            return
-        for pos, (text, url) in enumerate(links):
-            if pos == 0:
-                self.para_text(" ")
-            else:
-                self.para_text(", ")
-            self.para_text(
-                f'<link href="{url}" underline="true" color="blue">{text}</link>'
-            )
 
     def write_indexed(self):
-        "Write the index."
-        assert self.any_indexed
-        self.add_pagebreak()
-        self.add_heading(Tx("Index"), 1, anchor="index")
-        self.flowables.append(self.index)
+        "Write the index; return the SimpleIndex object."
+        if not self.indexed:
+            return None
+        self.write_page_break()
+        self.write_heading(self.tx("Index"), 1, anchor="index")
+        result = SimpleIndex(style=self.stylesheet["Index"], headers=False)
+        self.flowables.append(result)
+        return result
 
-    def render(self, ast):
-        "Render the content AST node hierarchy."
-        try:
-            method = getattr(self, f"render_{ast['element']}")
-        except AttributeError:
-            print("Could not handle ast", ast)
+    def para_push(self, stylename="Normal", preformatted=False):
+        "Push new container for text in a paragraph onto the stack."
+        self.para_stack.append(([], stylename, preformatted))
+
+    def para_pop(self, stylename=None, preformatted=None, add=True):
+        "Write out paragraph containing the saved-up text."
+        popped = self.para_stack.pop()
+        parts = popped[0]
+        if stylename is None:
+            stylename = popped[1]
+        if preformatted is None:
+            preformatted = popped[2]
+        text = "".join(parts)
+        if self.list_stack:
+            if preformatted:
+                self.list_stack[-1].append(
+                    Preformatted(text, style=self.stylesheet[stylename])
+                )
+            else:
+                self.list_stack[-1].append(
+                    Paragraph(text, style=self.stylesheet[stylename])
+                )
+        elif add:
+            if preformatted:
+                self.write_preformatted(text, stylename)
+            else:
+                self.write_paragraph(text, stylename)
         else:
-            method(ast)
+            return Paragraph(text, style=self.stylesheet[stylename])
+
+    def para_text(self, text):
+        "Add text to container on top of stack."
+        self.para_stack[-1][0].append(text)
+
+    def display_page_number(self, canvas, doc):
+        "Output page number onto the current canvas."
+        width, height = reportlab.rl_config.defaultPageSize
+        canvas.saveState()
+        canvas.setFont("Helvetica", 10)
+        canvas.drawString(width - 84, height - 56, str(doc.page))
+        canvas.restoreState()
 
     def render_document(self, ast):
         self.within_quote = False
         self.within_code = False
-        self.within_footnote = False
         self.para_stack = []
         for child in ast["children"]:
             self.render(child)
@@ -333,28 +404,26 @@ class PdfCompiler:
 
     def render_paragraph(self, ast):
         self.para_push()
-        if self.paragraph_number is not None and not self.within_footnote:
+        if self.paragraph_number is not None:
             self.paragraph_number += 1
             self.para_text('<font face="courier">')
             self.para_text(f"{self.paragraph_number}.")
             self.para_text("</font> ")
         for child in ast["children"]:
             self.render(child)
-        stylename = None
-        preformatted = None
         if self.within_quote:
-            stylename = "Quote"
+            self.para_pop(stylename="Quote")
         elif self.within_code:
-            stylename = "Code"
-            preformatted = True
-        elif self.within_footnote:
-            if isinstance(self.within_footnote, str):
-                self.para_stack[-1][0].insert(0, self.within_footnote)
-                self.within_footnote = True
-                stylename = "Footnote"
+            self.para_pop(stylename="Code", preformatted=True)
+        elif self.footnote_def_flag:
+            if self.footnote_def_flag >= 1:
+                self.para_stack[-1][0].insert(0, f"<b>{self.footnote_def_flag}.</b> ")
+                self.footnote_def_flag = -1
+                self.para_pop(stylename="Footnote")
             else:
-                stylename = "Footnote subsequent"
-        self.para_pop(stylename=stylename, preformatted=preformatted)
+                self.para_pop(stylename="Footnote subsequent")
+        else:
+            self.para_pop()
 
     def render_raw_text(self, ast):
         self.para_text(ast["children"])
@@ -569,143 +638,21 @@ class PdfCompiler:
         self.list_stack[-1].append(item)
 
     def render_indexed(self, ast):
-        if self.indexed_font == constants.ITALIC:
-            fs = "<i>"
-            fe = "</i>"
-        elif self.indexed_font == constants.BOLD:
-            fs = "<b>"
-            fe = "</b>"
-        elif self.indexed_font == constants.UNDERLINE:
-            fs = "<u>"
-            fe = "</u>"
-        else:
-            fs = ""
-            fe = ""
         item = ast["canonical"].replace(",", ",,").replace(";", ",")
         self.para_text(f'<index item="{item}"/>')
-        self.para_text(f'{fs}{ast["term"]}{fe}')
-        self.any_indexed = True
+        self.para_text(f'<u>{ast["term"]}</u>')
 
     def render_footnote_ref(self, ast):
-        # The label is used only for lookup; a number is shown in the output.
-        label = ast["label"]
-        if self.footnotes_location == constants.FOOTNOTES_EACH_TEXT:
-            entries = self.footnotes.setdefault(self.current_text.fulltitle, {})
-            number = len(entries) + 1
-            key = label
-        elif self.footnotes_location in (
-            constants.FOOTNOTES_EACH_CHAPTER,
-            constants.FOOTNOTES_END_OF_BOOK,
-        ):
-            fulltitle = self.current_text.chapter.fulltitle
-            entries = self.footnotes.setdefault(fulltitle, {})
-            number = len(entries) + 1
-            key = f"{fulltitle}-{label}"
-        entries[key] = dict(label=label, number=number)
-        self.para_text(f"<super><b>{number}</b></super>")
+        self.para_text(f" <super><b>{ast['number']}</b></super>")
 
     def render_footnote_def(self, ast):
-        "Add footnote definition to lookup."
-        label = ast["label"]
-        if self.footnotes_location == constants.FOOTNOTES_EACH_TEXT:
-            fulltitle = self.current_text.fulltitle
-            key = label
-        elif self.footnotes_location in (
-            constants.FOOTNOTES_EACH_CHAPTER,
-            constants.FOOTNOTES_END_OF_BOOK,
-        ):
-            fulltitle = self.current_text.chapter.fulltitle
-            key = f"{fulltitle}-{label}"
-        # Footnote def may be missing.
-        try:
-            self.footnotes[fulltitle][key]["ast_children"] = ast["children"]
-        except KeyError:
-            pass
+        "The footnote definition in the element stream is not used; ignore."
+        pass
 
     def render_reference(self, ast):
-        if ast["id"] in self.references:
-            self.referenced.add(ast["id"])
-            if self.reference_font == constants.ITALIC:
-                fs = "<i>"
-                fe = "</i>"
-            elif self.reference_font == constants.BOLD:
-                fs = "<b>"
-                fe = "</b>"
-            elif self.reference_font == constants.UNDERLINE:
-                fs = "<u>"
-                fe = "</u>"
-            else:
-                fs = ""
-                fe = ""
-            self.para_text(f'<link href="#{ast["id"]}">{fs}{ast["name"]}{fe}</link>')
-        else:
-            self.para_text(f'??? no such refid {ast["id"]} ???')
-
-    def render_comment(self, ast):
-        if self.output_comments:
-            self.para_text(f'<span backcolor="yellow"><b>{ast["comment"]}</b></span>')
-
-    def add_paragraph(self, text, stylename="Normal"):
-        self.flowables.append(Paragraph(text, style=self.stylesheet[stylename]))
-
-    def add_preformatted(self, text, stylename="Normal"):
-        self.flowables.append(Preformatted(text, style=self.stylesheet[stylename]))
-
-    def add_heading(self, heading, level, anchor=None):
-        """Add heading given the level.
-        If the anchor is given, create TOC entry and anchor.
-        """
-        level = min(level, constants.MAX_LEVEL)
-        if anchor:
-            if level <= self.toc_level:
-                self.flowables.append(TocMarker(level - 1, heading, anchor))
-            heading = f'<a name="__anchor__{anchor}"/>' + heading
-        self.add_paragraph(heading, stylename=f"Heading{level}")
-
-    def add_pagebreak(self):
-        self.flowables.append(NotAtTopPageBreak())
-
-    def para_push(self, stylename="Normal", preformatted=False):
-        "Push new container for text in a paragraph onto the stack."
-        self.para_stack.append(([], stylename, preformatted))
-
-    def para_pop(self, stylename=None, preformatted=None, add=True):
-        "Output paragraph containing the saved-up text."
-        popped = self.para_stack.pop()
-        parts = popped[0]
-        if stylename is None:
-            stylename = popped[1]
-        if preformatted is None:
-            preformatted = popped[2]
-        text = "".join(parts)
-        if self.list_stack:
-            if preformatted:
-                self.list_stack[-1].append(
-                    Preformatted(text, style=self.stylesheet[stylename])
-                )
-            else:
-                self.list_stack[-1].append(
-                    Paragraph(text, style=self.stylesheet[stylename])
-                )
-        elif add:
-            if preformatted:
-                self.add_preformatted(text, stylename)
-            else:
-                self.add_paragraph(text, stylename)
-        else:
-            return Paragraph(text, style=self.stylesheet[stylename])
-
-    def para_text(self, text):
-        "Add text to container on top of stack."
-        self.para_stack[-1][0].append(text)
-
-    def display_page_number(self, canvas, doc):
-        "Output page number onto the current canvas."
-        width, height = reportlab.rl_config.defaultPageSize
-        canvas.saveState()
-        canvas.setFont("Helvetica", 10)
-        canvas.drawString(width - 84, height - 56, str(doc.page))
-        canvas.restoreState()
+        self.para_text(f'<link href="#{ast["name"]}"><b>{ast["name"]}</b></link>')
+        reference = self.referenced[ast["name"]]
+        self.para_text(f": <i>{reference['title']}</i>")
 
 
 class TocDocTemplate(SimpleDocTemplate):
@@ -733,160 +680,3 @@ class TocMarker(NullDraw):
         self.toc_level = toc_level
         self.toc_text = toc_text
         self.toc_anchor = toc_anchor
-
-
-class BookWriter(Writer):
-    "PDF book writer."
-
-    def get_content(self):
-        "Create the PDF document of the book return its content."
-        # Write book title page containing authors and metadata.
-        self.add_paragraph(self.book.title, "Title")
-        self.flowables.append(
-            HRFlowable(width="100%", color=reportlab.lib.colors.black, spaceAfter=20)
-        )
-        if self.book.subtitle:
-            self.add_paragraph(self.book.subtitle, "Heading1")
-        for author in self.book.authors:
-            self.add_paragraph(", ".join(self.book.authors), "Heading2")
-        self.flowables.append(Spacer(0, 28))
-
-        self.render(self.book.ast)
-
-        if self.title_page_metadata:
-            self.flowables.append(Spacer(0, 100))
-            self.add_preformatted(
-                f'{Tx("Status")}: {Tx(self.book.status)}\n'
-                f'{Tx("Created")}: {utils.str_datetime_display()}\n'
-                f'{Tx("Modified")}: {utils.str_datetime_display(self.book.modified)}',
-                stylename="Italic",
-            )
-
-        # Write table of contents (TOC) page(s).
-        if self.toc_level and self.book.items:
-            self.add_pagebreak()
-            self.add_paragraph(Tx("Contents"), "Heading1")
-            level_styles = []
-            for level in range(0, constants.PDF_MAX_TOC_LEVEL + 1):
-                style = ParagraphStyle(
-                    name=f"TOC level {level}",
-                    fontName=constants.PDF_NORMAL_FONT,
-                    fontSize=constants.PDF_TOC_FONT_SIZE,
-                    leading=constants.PDF_TOC_LEADING,
-                    firstLineIndent=constants.PDF_TOC_INDENT * level,
-                    leftIndent=constants.PDF_TOC_INDENT * (level + 1),
-                )
-                level_styles.append(style)
-            self.toc = TableOfContents(
-                dotsMinLevel=-1,
-                levelStyles=level_styles,
-                notifyKind="TOCEntry",
-            )
-            self.flowables.append(self.toc)
-
-        # First-level items are chapters.
-        for item in self.book.items:
-            if item.status == constants.OMITTED:
-                continue
-            if item.status < self.include_status:
-                continue
-
-            if item.is_section:
-                self.write_section(item, level=1)
-            else:
-                self.write_text(item, level=1)
-
-            if self.footnotes_location == constants.FOOTNOTES_EACH_CHAPTER:
-                self.write_chapter_footnotes(item)
-
-        if self.footnotes_location == constants.FOOTNOTES_END_OF_BOOK:
-            self.write_book_footnotes()
-
-        if self.referenced:
-            self.write_references()
-
-        output = io.BytesIO()
-        if self.toc_level:
-            document = TocDocTemplate(
-                output,
-                toc_level=self.toc_level,
-                title=self.book.title,
-                author=", ".join(self.book.authors) or None,
-                creator=f"writethatbook {constants.__version__}",
-                lang=self.book.language,
-            )
-
-            if self.any_indexed:
-                self.write_indexed()
-                document.multiBuild(
-                    self.flowables,
-                    onLaterPages=self.display_page_number,
-                    canvasmaker=self.index.getCanvasMaker(),
-                )
-            else:
-                document.multiBuild(
-                    self.flowables, onLaterPages=self.display_page_number
-                )
-        else:
-            document = SimpleDocTemplate(
-                output,
-                title=self.book.title,
-                author=", ".join(self.book.authors) or None,
-                creator=f"writethatbook {constants.__version__}",
-                lang=self.book.language,
-            )
-            if self.any_indexed:
-                document.build(
-                    self.flowables,
-                    onLaterPages=self.display_page_number,
-                    canvasmaker=self.index.getCanvasMaker(),
-                )
-            else:
-                document.build(self.flowables, onLaterPages=self.display_page_number)
-        return output.getvalue()
-
-
-class ItemWriter(Writer):
-    "PDF item (section or text) writer."
-
-    def get_content(self, item):
-        "Create the PDF document of the given item and return its content."
-        # Force footnotes at end of each text.
-        self.footnotes_location = constants.FOOTNOTES_EACH_TEXT
-
-        self.skip_first_add_page = False
-        if item.is_section:
-            self.write_section(item, level=item.level)
-        else:
-            self.write_text(item, level=item.level)
-
-        if self.referenced:
-            self.write_references()
-        if self.any_indexed:
-            self.write_indexed()
-
-        output = io.BytesIO()
-        document = SimpleDocTemplate(
-            output,
-            title=item.title,
-            author=", ".join(self.book.authors) or None,
-            creator=f"writethatbook {constants.__version__}",
-            lang=self.book.language,
-        )
-        try:
-            if self.any_indexed:
-                document.build(
-                    self.flowables,
-                    onFirstPage=self.display_page_number,
-                    onLaterPages=self.display_page_number,
-                    canvasmaker=self.index.getCanvasMaker(),
-                )
-            else:
-                document.build(
-                    self.flowables,
-                    onFirstPage=self.display_page_number,
-                    onLaterPages=self.display_page_number,
-                )
-        except LayoutError as error:
-            raise Error(str(error))
-        return output.getvalue()

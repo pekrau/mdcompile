@@ -30,8 +30,7 @@ class DocxCompiler(Compiler):
             lang_default = rpr_default.xpath("w:lang")[0]
             lang_default.set(docx.oxml.shared.qn("w:val"), self.language)
 
-        # Set to A4 page size.
-        # XXX Make configurable.
+        # Set to A4 page size. XXX Allow alternatives.
         section = self.doc.sections[0]
         section.page_height = docx.shared.Mm(297)
         section.page_width = docx.shared.Mm(210)
@@ -86,6 +85,7 @@ class DocxCompiler(Compiler):
         style.paragraph_format.right_indent = docx.shared.Pt(
             constants.DOCX_QUOTE_INDENT
         )
+        style.font.size = docx.shared.Pt(constants.DOCX_QUOTE_FONT_SIZE)
 
         style = self.doc.styles.add_style("Code", WD_STYLE_TYPE.PARAGRAPH)
         style.font.name = constants.DOCX_CODE_FONT
@@ -94,14 +94,6 @@ class DocxCompiler(Compiler):
             constants.DOCX_CODE_LINE_SPACING
         )
         style.paragraph_format.left_indent = docx.shared.Pt(constants.DOCX_CODE_INDENT)
-
-        style = self.doc.styles["Footer"]
-        style.font.size = docx.shared.Pt(constants.DOCX_FOOTER_FONT_SIZE)
-
-        # Define the DOCX footer contents.
-        section.footer.paragraphs[0].text = (
-            f"{self.tx('Created')}: {utils.isoformat()}\t{self.tx('Latest modification')}: {utils.isoformat(self.main.modified)}"
-        )
 
         # Set Dublin core metadata.
         self.doc.core_properties.author = ", ".join(self.main.authors)
@@ -126,13 +118,9 @@ class DocxCompiler(Compiler):
         run._r.append(instrText)
         run._r.append(fldChar2)
 
-        # 0: not in footnote; -1: footnote started; >= 1: footnote number to start
-        self.footnote_def_flag = 0
-
-        # Write title page.
+        # Write title page: title, subtitle, initial note, authors, dates.
         paragraph = self.doc.add_paragraph(style="Title 0")
-        run = paragraph.add_run(self.main.title)
-
+        paragraph.add_run(self.main.title)
         if self.main.subtitle:
             paragraph = self.doc.add_paragraph(style="Title 1")
             paragraph.add_run(self.main.subtitle)
@@ -144,25 +132,29 @@ class DocxCompiler(Compiler):
             if author != self.main.authors[-1]:
                 paragraph.add_run(", ")
 
-        # Title-page text; synopsis, or similar.
-        DocxRenderer(self, self.main)
+        self.text_render(self.main)
+
+        paragraph = self.doc.add_paragraph(style="Normal")
+        paragraph.add_run(
+            f'{self.tx("Created")}: {utils.isoformat()}\n'
+            f'{self.tx("Latest modification")}: {utils.isoformat(self.main.modified)}'
+        ).font.italic = True
 
         # Write table of contents (TOC) page(s).
         # The DOCX format does not allow determining the page numbers before printing.
-        if self.toc_level:
-            self.doc.add_page_break()
+        if self.toc_level and self.main.subtexts:
+            self.write_page_break()
             self.write_heading(self.tx("Contents"), 1)
-            for text in list(self.main)[1:]:  # Skip the main file; title page.
-                if text.level > self.toc_level:
-                    continue
-                paragraph = self.doc.add_paragraph(style="Body Text")
-                paragraph.paragraph_format.left_indent = docx.shared.Pt(
-                    constants.DOCX_TOC_INDENT * text.level
-                )
-                paragraph.paragraph_format.first_line_indent = -docx.shared.Pt(
-                    constants.DOCX_TOC_INDENT
-                )
-                paragraph.add_run(self.numbered_title(text))
+            for text in list(self.main)[1:]:  # Skip the main file (title page).
+                if text.level <= self.toc_level:
+                    paragraph = self.doc.add_paragraph(style="Body Text")
+                    paragraph.paragraph_format.left_indent = docx.shared.Pt(
+                        constants.DOCX_TOC_INDENT * text.level
+                    )
+                    paragraph.paragraph_format.first_line_indent = -docx.shared.Pt(
+                        constants.DOCX_TOC_INDENT
+                    )
+                    paragraph.add_run(self.numbered_title(text))
 
             # Write entries for book footnotes, references and indexed, if any such.
             if (
@@ -178,16 +170,14 @@ class DocxCompiler(Compiler):
         # First-level subtexts are chapters.
         for text in self.main.subtexts:
             self.write_text(text)
-            if (
-                self.footnotes_location == constants.FOOTNOTES_CHAPTER
-                and text.footnotes
-            ):
-                self.doc.add_page_break()
-                self.write_heading(self.tx("Footnotes"), 3)
-                self.write_footnotes(text)
+            if self.footnotes_location == constants.FOOTNOTES_CHAPTER:
+                if text.footnotes:
+                    self.write_page_break()
+                    self.write_heading(self.tx("Footnotes"), 3)
+                    self.write_footnotes(text)
 
         if self.footnotes_location == constants.FOOTNOTES_BOOK:
-            self.doc.add_page_break()
+            self.write_page_break()
             self.write_heading(self.tx("Footnotes"), 1)
             self.write_footnotes(self.main)
 
@@ -200,13 +190,12 @@ class DocxCompiler(Compiler):
     def write_text(self, text):
         "Write the contents of the text instance."
         if text.level <= self.page_break_level:
-            self.doc.add_page_break()
+            self.write_page_break()
         self.write_heading(self.numbered_title(text), text.level)
         if text.subtitle:
             self.write_heading(text.subtitle, text.level + 1)
-        self.current_text = text
 
-        DocxRenderer(self, text)
+        self.text_render(text)
 
         if self.footnotes_location == constants.FOOTNOTES_TEXT and text.footnotes:
             self.write_heading(self.tx("Footnotes"), text.level + 2)
@@ -215,35 +204,30 @@ class DocxCompiler(Compiler):
         for subtext in text.subtexts:
             self.write_text(subtext)
 
-    def write_footnotes(self, text):
-        "Write out the footnotes for the text."
-        for footnote in sorted(text.footnotes.values(), key=lambda f: f["number"]):
-            self.footnote_def_flag = footnote["number"]
-            for child in footnote["children"]:
-                DocxRenderer(self, ast=child)
-            self.footnote_def_flag = 0
-
     def write_heading(self, heading, level):
         if level <= constants.MAX_LEVEL:
             paragraph = self.doc.add_paragraph(style=f"Title {level}")
             paragraph.add_run(heading)
         else:
             paragraph = self.doc.add_paragraph()
-            run = paragraph.add_run(heading)
-            run.font.italic = True
+            paragraph.add_run(heading).font.italic = True
 
-    def numbered_title(self, text, force=False):
-        "Return the title with a number prefix."
-        if text.level <= self.section_number_level or force:
-            return f"{'.'.join([str(i) for i in text.ordinal])}. {text.title}"
-        else:
-            return text.title
+    def write_page_break(self):
+        self.doc.add_page_break()
+
+    def write_footnotes(self, text):
+        "Write out the footnotes for the text."
+        for footnote in sorted(text.footnotes.values(), key=lambda f: f["number"]):
+            self.footnote_def_flag = footnote["number"]
+            for child in footnote["children"]:
+                self.render(child)
+            self.footnote_def_flag = 0
 
     def write_referenced(self):
-        "Write referenced pages, if any such items."
+        "Write referenced pages, if any."
         if not self.referenced:
             return
-        self.doc.add_page_break()
+        self.write_page_break()
         self.write_heading(self.tx("References"), 1)
         for name, reference in sorted(self.referenced.items()):
             paragraph = self.doc.add_paragraph()
@@ -253,8 +237,7 @@ class DocxCompiler(Compiler):
             paragraph.paragraph_format.first_line_indent = -docx.shared.Pt(
                 constants.DOCX_REFERENCE_INDENT
             )
-            run = paragraph.add_run(reference["reference"])
-            run.font.bold = True
+            paragraph.add_run(name).font.bold = True
             paragraph.add_run("  ")
             self.write_reference_authors(paragraph, reference)
             try:
@@ -274,68 +257,54 @@ class DocxCompiler(Compiler):
                     paragraph.add_run(" & ")
                 else:
                     paragraph.add_run(", ")
-            paragraph.add_run(utils.short_person_name(author))
+            paragraph.add_run(author)
+        paragraph.add_run(": ")
 
     def write_reference_article(self, paragraph, reference):
-        paragraph.add_run(" ")
         paragraph.add_run(reference["title"])
-        try:
-            run = paragraph.add_run(f", {reference['journal']}")
-            run.font.italic = True
-        except KeyError:
-            pass
-        try:
-            paragraph.add_run(f" {reference['volume']}")
-        except KeyError:
-            pass
-        else:
-            try:
-                paragraph.add_run(f" ({reference['issue']})")
-            except KeyError:
-                pass
-        try:
-            paragraph.add_run(f" {reference['pages'].replace('--', '-')}")
-        except KeyError:
-            pass
+        paragraph.add_run(",")
+        if journal := reference.get("journal"):
+            paragraph.add_run(" ")
+            paragraph.add_run(journal).font.italic = True
+        if volume := reference.get("volume"):
+            paragraph.add_run(" ")
+            paragraph.add_run(volume).font.bold = True
+        if issue := reference.get("issue"):
+            paragraph.add_run(f" ({issue})")
+        if pages := reference.get("pages"):
+            paragraph.add_run(" ")
+            paragraph.add_run(pages.replace("--", "-"))
 
     def write_reference_book(self, paragraph, reference):
-        paragraph.add_run(" ")
-        run = paragraph.add_run(reference["title"])
-        run.font.italic = True
-        try:
-            paragraph.add_run(f" {reference['publisher']}")
-            paragraph.add_run(f", {reference['edition_published']}")
-        except KeyError:
-            pass
+        paragraph.add_run(reference["title"]).font.italic = True
+        if edition := reference.get("edition"):
+            paragraph.add_run(",")
+            if publisher := edition.get("publisher"):
+                paragraph.add_run(" ")
+                paragraph.add_run(publisher)
+            if published := edition.get("published"):
+                paragraph.add_run(" ")
+                paragraph.add_run(published)
 
     def write_reference_link(self, paragraph, reference):
-        paragraph.add_run(" ")
-        run = paragraph.add_run(reference["title"])
-        run.font.italic = True
+        paragraph.add_run(reference["title"]).font.italic = True
         if url := reference.get("url"):
-            paragraph.add_run(" ")
-            self.add_hyperlink(paragraph, url, "")
-            try:
-                paragraph.add_run(f" Accessed {reference['accessed']}.")
-            except KeyError:
-                pass
+            paragraph.add_run(", ")
+            self.add_hyperlink(paragraph, url, url)
+            if accessed := reference.get("accessed"):
+                paragraph.add_run(f" ({self.tx('accessed')} {accessed})")
 
     def write_reference_external_links(self, paragraph, reference):
-        any_item = False
+        "Write external links; doi, pmid, isbn, ..."
         if url := reference.get("url"):
+            paragraph.add_run(" ")
             self.add_hyperlink(paragraph, url, url)
-            any_item = True
         for key, (label, template) in constants.REFS_LINKS.items():
             try:
                 value = reference[key]
-                if any_item:
-                    paragraph.add_run(", ")
-                else:
-                    paragraph.add_run(" ")
-                self.add_hyperlink(
-                    paragraph, template.format(value=value), f"{label}:{value}"
-                )
-                any_item = True
+                url = template.format(value=value)
+                paragraph.add_run(" ")
+                self.add_hyperlink(paragraph, url, f"{label}:{value}")
             except KeyError:
                 pass
 
@@ -343,7 +312,7 @@ class DocxCompiler(Compiler):
         "Write indexed terms pages, if any such items."
         if not self.indexed:
             return
-        self.doc.add_page_break()
+        self.write_page_break()
         self.write_heading(self.tx("Index"), 1)
         items = sorted(self.indexed.items(), key=lambda i: i[0].casefold())
         for canonical, texts in items:
@@ -362,116 +331,67 @@ class DocxCompiler(Compiler):
                 constants.DOCX_INDEXED_SPACE_AFTER
             )
 
-    # https://github.com/python-openxml/python-docx/issues/74#issuecomment-261169410
-    def add_hyperlink(self, paragraph, url, text, color="2222FF", underline=True):
-        """
-        A function that places a hyperlink within a paragraph object.
-
-        :param paragraph: The paragraph we are adding the hyperlink to.
-        :param url: A string containing the required url
-        :param text: The text displayed for the url
-        :return: The hyperlink object
-        """
-
-        # Get access to the document.xml.rels file and gets a new relation id value.
+    # https://github.com/python-openxml/python-docx/issues/610
+    def add_hyperlink(self, paragraph, url, text):
+        run = paragraph.add_run(text)
+        # Gets access to the document.xml.rels file and gets a new relation id value
         part = paragraph.part
         r_id = part.relate_to(
             url, docx.opc.constants.RELATIONSHIP_TYPE.HYPERLINK, is_external=True
         )
+        # Create the w:hyperlink tag and add needed values
+        hyperlink = docx.oxml.shared.OxmlElement('w:hyperlink')
+        hyperlink.set(docx.oxml.shared.qn('r:id'), r_id, )
+        hyperlink.append(run._r)
+        paragraph._p.insert(len(paragraph.runs)+2, hyperlink)
+        # run.font.color.rgb = docx.shared.RGBColor(34, 34, 255)
+        run.font.color.rgb = docx.shared.RGBColor(65, 105, 225)
+        run.font.underline = True
 
-        # Create the w:hyperlink tag and add needed values.
-        hyperlink = docx.oxml.shared.OxmlElement("w:hyperlink")
-        hyperlink.set(
-            docx.oxml.shared.qn("r:id"),
-            r_id,
-        )
+    def add_image(self, image_data, ast, factor):
+        image = io.BytesIO(image_data)
+        width, height = PIL.Image.open(image).size
+        width = docx.shared.Pt(factor * width)
+        height = docx.shared.Pt(factor * height)
+        paragraph = self.doc.add_paragraph()
+        # This is a kludge; seems required to avoid an obscure 'docx' bug?
+        paragraph.paragraph_format.line_spacing = 1
+        paragraph.add_run().add_picture(image, width=width, height=height)
+        if ast["children"]:
+            paragraph.paragraph_format.keep_with_next = True
+            self.current_paragraph = self.doc.add_paragraph(style="Normal")
+            for child in ast["children"]:
+                self.render(child)
 
-        # Create a w:r element.
-        new_run = docx.oxml.shared.OxmlElement("w:r")
-
-        # Create a new w:rPr element.
-        rPr = docx.oxml.shared.OxmlElement("w:rPr")
-
-        # Add color if it is given.
-        if not color is None:
-            c = docx.oxml.shared.OxmlElement("w:color")
-            c.set(docx.oxml.shared.qn("w:val"), color)
-            rPr.append(c)
-
-        # Remove underlining if it is requested.
-        # XXX Does not seem to work? /Per Kraulis
-        if not underline:
-            u = docx.oxml.shared.OxmlElement("w:u")
-            u.set(docx.oxml.shared.qn("w:val"), "none")
-            rPr.append(u)
-
-        # Join all the xml elements together add add the required text to the w:r element.
-        new_run.append(rPr)
-        new_run.text = text
-        hyperlink.append(new_run)
-
-        paragraph._p.append(hyperlink)
-
-        return hyperlink
-
-
-class DocxRenderer:
-    "Render the Markdown text AST to DOCX."
-
-    def __init__(self, compiler, text=None, ast=None):
-        assert text is not None or ast is not None
-        self.compiler = compiler
-        self.doc = compiler.doc
-        self.text = text
-        self.list_stack = []
-        self.style_stack = ["Normal"]
-        self.bold = False
-        self.italic = False
-        self.subscript = False
-        self.superscript = False
-        self(ast or text.ast)
-
-    def __call__(self, ast):
-        "Render the Markdown text AST."
-        try:
-            method = getattr(self, ast["element"])
-        except AttributeError:
-            raise ValueError(f"renderer could not handle ast {ast}")
-        else:
-            method(ast)
-
-    def document(self, ast):
+    def render_document(self, ast):
         self.prev_blank_line = False
         for child in ast["children"]:
-            self(child)
+            self.render(child)
 
-    def heading(self, ast):
+    def render_heading(self, ast):
         # XXX Limited implementation; this just handles one child of raw text.
         level = ast["level"]
-        if self.text:
-            level += self.text.level
-        self.compiler.write_heading(ast["children"][0]["children"], level)
+        if self.current_text:
+            level += self.current_text.level
+        self.write_heading(ast["children"][0]["children"], level)
 
-    def paragraph(self, ast):
+    def render_paragraph(self, ast):
         self.current_paragraph = self.doc.add_paragraph()
 
         # Either starting footnote definition, or within it.
-        if self.compiler.footnote_def_flag != 0:
+        if self.footnote_def_flag != 0:
             self.current_paragraph.paragraph_format.left_indent = docx.shared.Pt(
                 constants.DOCX_FOOTNOTE_INDENT
             )
             # Starting footnote definition.
-            if self.compiler.footnote_def_flag > 0:
+            if self.footnote_def_flag > 0:
                 self.current_paragraph.paragraph_format.first_line_indent = (
                     -docx.shared.Pt(constants.DOCX_FOOTNOTE_INDENT)
                 )
-                run = self.current_paragraph.add_run(
-                    f"{self.compiler.footnote_def_flag}."
-                )
-                run.font.bold = True
+                self.current_paragraph.add_run(f"{self.footnote_def_flag}.").font.bold = True
                 self.current_paragraph.add_run(" ")
                 # Signal for being within footnote definition.
-                self.compiler.footnote_def_flag = -1
+                self.footnote_def_flag = -1
 
         if self.list_stack:
             data = self.list_stack[-1]
@@ -497,15 +417,14 @@ class DocxRenderer:
         else:
             self.current_paragraph.style = self.style_stack[-1]
 
-        if self.compiler.paragraph_number is not None:
-            self.compiler.paragraph_number += 1
-            run = self.current_paragraph.add_run(f"{self.compiler.paragraph_number}. ")
-            run.style = self.doc.styles["Intense Quote Char"]
+        if self.paragraph_number is not None:
+            self.paragraph_number += 1
+            self.current_paragraph.add_run(f"{self.paragraph_number}. ").style = self.doc.styles["Intense Quote Char"]
 
         for child in ast["children"]:
-            self(child)
+            self.render(child)
 
-    def raw_text(self, ast):
+    def render_raw_text(self, ast):
         line = ast["children"]
         line = line.rstrip("\n")
         run = self.current_paragraph.add_run(line)
@@ -518,34 +437,33 @@ class DocxRenderer:
         if self.superscript:
             run.font.superscript = True
 
-    def blank_line(self, ast):
+    def render_blank_line(self, ast):
         pass
 
-    def quote(self, ast):
+    def render_quote(self, ast):
         self.style_stack.append("Quote")
         for child in ast["children"]:
-            self(child)
+            self.render(child)
         self.style_stack.pop()
 
-    def code_span(self, ast):
-        run = self.current_paragraph.add_run(ast["children"])
-        run.style = self.doc.styles["Macro Text Char"]
+    def render_code_span(self, ast):
+        self.current_paragraph.add_run(ast["children"]).style = self.doc.styles["Macro Text Char"]
 
-    def code_block(self, ast):
+    def render_code_block(self, ast):
         self.current_paragraph = self.doc.add_paragraph(style="Code")
         self.style_stack.append("Code")
         for child in ast["children"]:
-            self(child)
+            self.render(child)
         self.style_stack.pop()
 
-    def fenced_code(self, ast):
+    def render_fenced_code(self, ast):
         self.current_paragraph = self.doc.add_paragraph(style="Code")
         self.style_stack.append("Code")
         for child in ast["children"]:
-            self(child)
+            self.render(child)
         self.style_stack.pop()
 
-    def image(self, ast):
+    def render_image(self, ast):
         try:
             # Fetch image from the web.
             if urllib.parse.urlparse(ast["dest"]).scheme:
@@ -614,69 +532,52 @@ class DocxRenderer:
             self.current_paragraph = self.doc.add_paragraph(style="Code")
             self.current_paragraph.add_run(str(error))
 
-    def add_image(self, image_data, ast, factor):
-        image = io.BytesIO(image_data)
-        width, height = PIL.Image.open(image).size
-        width = docx.shared.Pt(factor * width)
-        height = docx.shared.Pt(factor * height)
-        paragraph = self.doc.add_paragraph()
-        # This is a kludge; seems required to avoid an obscure 'docx' bug?
-        paragraph.paragraph_format.line_spacing = 1
-        paragraph.add_run().add_picture(image, width=width, height=height)
-        if ast["children"]:
-            paragraph.paragraph_format.keep_with_next = True
-            self.current_paragraph = self.doc.add_paragraph(style="Normal")
-            for child in ast["children"]:
-                self(child)
-
-    def emphasis(self, ast):
+    def render_emphasis(self, ast):
         self.italic = True
         for child in ast["children"]:
-            self(child)
+            self.render(child)
         self.italic = False
 
-    def strong_emphasis(self, ast):
+    def render_strong_emphasis(self, ast):
         self.bold = True
         for child in ast["children"]:
-            self(child)
+            self.render(child)
         self.bold = False
 
-    def subscript(self, ast):
+    def render_subscript(self, ast):
         self.subscript = True
         for child in ast["children"]:
-            self(child)
+            self.render(child)
         self.subscript = False
 
-    def superscript(self, ast):
+    def render_superscript(self, ast):
         self.superscript = True
         for child in ast["children"]:
-            self(child)
+            self.render(child)
         self.superscript = False
 
-    def emdash(self, ast):
+    def render_emdash(self, ast):
         self.current_paragraph.add_run(constants.EM_DASH)
 
-    def line_break(self, ast):
+    def render_line_break(self, ast):
         if ast.get("soft"):
             self.current_paragraph.add_run(" ")
         else:
             self.current_paragraph.add_run("\n")
 
-    def thematic_break(self, ast):
+    def render_thematic_break(self, ast):
         paragraph = self.doc.add_paragraph(constants.EM_DASH * 20)
         paragraph.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.CENTER
 
-    def link(self, ast):
+    def render_link(self, ast):
         # This handles only raw text within a link; can't handle multiple children.
         raw_text = []
         for child in ast["children"]:
             if child["element"] == "raw_text":
                 raw_text.append(child["children"])
-        self.compiler.add_hyperlink(
-            self.current_paragraph, ast["dest"], "".join(raw_text)
-        )
+        self.add_hyperlink(self.current_paragraph, ast["dest"], "".join(raw_text))
 
-    def list(self, ast):
+    def render_list(self, ast):
         data = dict(
             ordered=ast["ordered"],
             bullet=ast["bullet"],  # Currently not used.
@@ -687,32 +588,33 @@ class DocxRenderer:
         )
         self.list_stack.append(data)
         for child in ast["children"]:
-            self(child)
+            self.render(child)
         self.list_stack.pop()
 
-    def list_item(self, ast):
+    def render_list_item(self, ast):
         data = self.list_stack[-1]
         data["count"] += 1  # Currently not used.
         data["first_paragraph"] = True
         for child in ast["children"]:
-            self(child)
+            self.render(child)
 
-    def indexed(self, ast):
-        run = self.current_paragraph.add_run(ast["term"])
-        run.font.underline = True
+    def render_indexed(self, ast):
+        self.current_paragraph.add_run(ast["term"]).font.underline = True
 
-    def footnote_ref(self, ast):
+    def render_footnote_ref(self, ast):
         run = self.current_paragraph.add_run(f" {ast['number']}")
         run.font.superscript = True
         run.font.bold = True
 
-    def footnote_def(self, ast):
+    def render_footnote_def(self, ast):
         "The footnote definition in the element stream is not used; ignore."
         pass
 
-    def reference(self, ast):
-        run = self.current_paragraph.add_run(ast["name"])
-        run.font.bold = True
+    def render_reference(self, ast):
+        self.current_paragraph.add_run(ast["name"]).font.bold = True
+        self.current_paragraph.add_run(": ")
+        reference = self.referenced[ast["name"]]
+        self.current_paragraph.add_run(reference["title"]).font.italic = True
 
-    def link_ref_def(self, ast):
+    def render_link_ref_def(self, ast):
         pass

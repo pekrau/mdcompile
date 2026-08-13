@@ -14,6 +14,7 @@ import time
 
 import constants
 from docx_compiler import DocxCompiler
+from pdf_compiler import PdfCompiler
 from text import Text
 import utils
 
@@ -31,7 +32,7 @@ def get_cli_parser(default_filename="main"):
         "-o",
         "--output_filename",
         default=f"{default_filename}.docx",
-        help=f"Name of the output file. Its extension determines the format (docx or pdf). Default: '{default_filename}.docx'.",
+        help=f"Name of the output file. Its extension ('.docx' or '.pdf') determines the format. Default: '{default_filename}.docx'.",
     )
     try:
         default_refs_dirname = os.environ["REFERENCES"]
@@ -96,19 +97,21 @@ def main(
     match format:
         case "docx":
             compiler = DocxCompiler(main, refs_dir, paragraph_numbers=paragraph_numbers)
+        case "pdf":
+            compiler = PdfCompiler(main, refs_dir, paragraph_numbers=paragraph_numbers)
         case _:
             raise NotImplementedError(f"format {format}")
 
     compiler.preprocess()
     if not silent:
         print(f"Footnotes at end of {compiler.footnotes_location}.")
-        print(f"{len(compiler.referenced)} references used.")
+        print(f"{len(compiler.referenced)} references used from '{refs_dirname}'.")
         print(f"{len(compiler.indexed)} terms indexed.")
-        if paragraph_numbers:
-            print(f"{compiler.paragraph_number} paragraphs.")
 
     compiler.write(output_filename)
     if not silent:
+        if paragraph_numbers:
+            print(f"{compiler.paragraph_number} paragraphs.")
         print(f"'{output_filename}' written.")
 
     if README:

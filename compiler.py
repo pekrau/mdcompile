@@ -1,4 +1,4 @@
-"Abstract compiler class."
+"Abstract compiler and renderer classes."
 
 import constants
 from text import Text
@@ -6,7 +6,7 @@ import utils
 
 
 class Compiler:
-    "Abstract compiler class; to be inherited."
+    "Abstract compiler class; to be inherited and elaborated."
 
     def __init__(self, text, refs_dir, paragraph_numbers=False, silent=False):
         assert isinstance(text, Text)
@@ -25,29 +25,25 @@ class Compiler:
         fm = self.main.frontmatter
         self.language = fm.get("language", constants.SV_SE)
         self.tx = utils.Tx(self.language)
-        self.toc_level = fm.get("toc-level", 1)
-        self.page_break_level = fm.get("page-break-level", 1)
-        self.section_number_level = fm.get("text-number-level", 1)
+        self.toc_level = max(0, fm.get("toc-level", 1))
+        self.page_break_level = max(0, fm.get("page-break-level", 1))
+        self.text_number_level = max(0, fm.get("text-number-level", 1))
         self.footnotes_location = fm.get("footnotes-location", constants.FOOTNOTES_TEXT)
 
     def preprocess(self):
-        "Set up references, indexes and footnotes."
-        # Collect references.
+        "Collect references, indexes and footnotes."
         self.referenced = {}
         for text in self.main:
             for element in text.elements():
-                if element["element"] != "reference":
-                    continue
-                if element["name"] not in self.referenced:
-                    self.referenced[element["name"]] = self.refs_dir[element["name"]]
+                if element["element"] == "reference":
+                    if element["name"] not in self.referenced:
+                        self.referenced[element["name"]] = self.refs_dir[element["name"]]
 
-        # Collect indexed terms.
         self.indexed = {}
         for text in self.main:
             for element in text.elements():
-                if element["element"] != "indexed":
-                    continue
-                self.indexed.setdefault(element["canonical"], []).append(text)
+                if element["element"] == "indexed":
+                    self.indexed.setdefault(element["canonical"], []).append(text)
 
         # Transfer footnotes to the appropriate texts, and number them.
         match self.footnotes_location:
@@ -94,8 +90,34 @@ class Compiler:
                         self.main.footnotes.update(text.footnotes)
                         text.footnotes.clear()
 
+    def numbered_title(self, text, force=False):
+        "Return the title with a number prefix."
+        if text.level <= self.text_number_level or force:
+            return f"{'.'.join([str(i) for i in text.ordinal])}. {text.title}"
+        else:
+            return text.title
+
     def write(self, filename=None):
         "Convert the main text and its subtexts, if any, into the format."
         raise NotImplementedError
 
-    
+    def text_render(self, text=None):
+        self.current_text = text
+        # 0: not in footnote; -1: footnote started; >= 1: footnote number to start
+        self.footnote_def_flag = 0
+        self.list_stack = []
+        self.style_stack = ["Normal"]
+        self.bold = False
+        self.italic = False
+        self.subscript = False
+        self.superscript = False
+        self.render(text.ast)
+
+    def render(self, ast):
+        "Render the Markdown text AST node hierarchy."
+        try:
+            method = getattr(self, f"render_{ast['element']}")
+        except AttributeError:
+            print(f"renderer could not handle ast {ast}")
+        else:
+            method(ast)
