@@ -640,7 +640,10 @@ class PdfCompiler(Compiler):
     def render_indexed(self, ast):
         item = ast["canonical"].replace(",", ",,").replace(";", ",")
         self.para_text(f'<index item="{item}"/>')
-        self.para_text(f'<u>{ast["term"]}</u>')
+        if self.underline_indexed:
+            self.para_text(f'<u>{ast["term"]}</u>')
+        else:
+            self.para_text(ast["term"])
 
     def render_footnote_ref(self, ast):
         self.para_text(f" <super><b>{ast['number']}</b></super>")

@@ -599,7 +599,13 @@ class DocxCompiler(Compiler):
             self.render(child)
 
     def render_indexed(self, ast):
-        self.current_paragraph.add_run(ast["term"]).font.underline = True
+        run = self.current_paragraph.add_run(ast["term"])
+        if self.underline_indexed:
+            run.font.underline = True
+        if self.bold:
+            run.font.bold = True
+        if self.italic:
+            run.font.italic = True
 
     def render_footnote_ref(self, ast):
         run = self.current_paragraph.add_run(f" {ast['number']}")

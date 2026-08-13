@@ -28,6 +28,7 @@ class Compiler:
         self.toc_level = max(0, fm.get("toc-level", 1))
         self.page_break_level = max(0, fm.get("page-break-level", 1))
         self.text_number_level = max(0, fm.get("text-number-level", 1))
+        self.underline_indexed = fm.get("underline-indexed", True)
         self.footnotes_location = fm.get("footnotes-location", constants.FOOTNOTES_TEXT)
 
     def preprocess(self):
