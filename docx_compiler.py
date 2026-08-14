@@ -340,10 +340,13 @@ class DocxCompiler(Compiler):
             url, docx.opc.constants.RELATIONSHIP_TYPE.HYPERLINK, is_external=True
         )
         # Create the w:hyperlink tag and add needed values
-        hyperlink = docx.oxml.shared.OxmlElement('w:hyperlink')
-        hyperlink.set(docx.oxml.shared.qn('r:id'), r_id, )
+        hyperlink = docx.oxml.shared.OxmlElement("w:hyperlink")
+        hyperlink.set(
+            docx.oxml.shared.qn("r:id"),
+            r_id,
+        )
         hyperlink.append(run._r)
-        paragraph._p.insert(len(paragraph.runs)+2, hyperlink)
+        paragraph._p.insert(len(paragraph.runs) + 2, hyperlink)
         # run.font.color.rgb = docx.shared.RGBColor(34, 34, 255)
         run.font.color.rgb = docx.shared.RGBColor(65, 105, 225)
         run.font.underline = True
@@ -388,7 +391,9 @@ class DocxCompiler(Compiler):
                 self.current_paragraph.paragraph_format.first_line_indent = (
                     -docx.shared.Pt(constants.DOCX_FOOTNOTE_INDENT)
                 )
-                self.current_paragraph.add_run(f"{self.footnote_def_flag}.").font.bold = True
+                self.current_paragraph.add_run(
+                    f"{self.footnote_def_flag}."
+                ).font.bold = True
                 self.current_paragraph.add_run(" ")
                 # Signal for being within footnote definition.
                 self.footnote_def_flag = -1
@@ -419,7 +424,9 @@ class DocxCompiler(Compiler):
 
         if self.paragraph_number is not None:
             self.paragraph_number += 1
-            self.current_paragraph.add_run(f"{self.paragraph_number}. ").style = self.doc.styles["Intense Quote Char"]
+            self.current_paragraph.add_run(f"{self.paragraph_number}. ").style = (
+                self.doc.styles["Intense Quote Char"]
+            )
 
         for child in ast["children"]:
             self.render(child)
@@ -447,7 +454,9 @@ class DocxCompiler(Compiler):
         self.style_stack.pop()
 
     def render_code_span(self, ast):
-        self.current_paragraph.add_run(ast["children"]).style = self.doc.styles["Macro Text Char"]
+        self.current_paragraph.add_run(ast["children"]).style = self.doc.styles[
+            "Macro Text Char"
+        ]
 
     def render_code_block(self, ast):
         self.current_paragraph = self.doc.add_paragraph(style="Code")

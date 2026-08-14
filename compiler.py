@@ -38,7 +38,9 @@ class Compiler:
             for element in text.elements():
                 if element["element"] == "reference":
                     if element["name"] not in self.referenced:
-                        self.referenced[element["name"]] = self.refs_dir[element["name"]]
+                        self.referenced[element["name"]] = self.refs_dir[
+                            element["name"]
+                        ]
 
         self.indexed = {}
         for text in self.main:

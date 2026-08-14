@@ -7,9 +7,9 @@ import icecream
 
 icecream.install()
 
-import argparse
 import os
 import pathlib
+import sys
 import time
 
 import constants
@@ -18,60 +18,33 @@ from pdf_compiler import PdfCompiler
 from text import Text
 import utils
 
-
-def get_cli_parser(default_filename="main"):
-    "Get the command-line parser."
-    parser = argparse.ArgumentParser(prog="mdc", description=__doc__)
-    parser.add_argument(
-        "input_filename",
-        nargs="?",
-        default=f"{default_filename}.md",
-        help=f"Name of Markdown file to compile. Default: '{default_filename}.md'.",
-    )
-    parser.add_argument(
-        "-o",
-        "--output_filename",
-        default=f"{default_filename}.docx",
-        help=f"Name of the output file. Its extension ('.docx' or '.pdf') determines the format. Default: '{default_filename}.docx'.",
-    )
-    try:
-        default_refs_dirname = os.environ["REFERENCES"]
-    except KeyError:
-        default_refs_dirname = "./references"
-    parser.add_argument(
-        "-r",
-        "--refs_dirname",
-        default=default_refs_dirname,
-        help=f"Directory containing the YAML files for references (articles, books). Default '{default_refs_dirname}'",
-    )
-    group = parser.add_mutually_exclusive_group()
-    group.add_argument(
-        "-s",
-        "--silent",
-        action="store_true",
-        help="Output no execution information.",
-    )
-    group.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Output more execution information.",
-    )
-    parser.add_argument(
-        "-p",
-        "--paragraph-numbers",
-        action="store_true",
-        help="Write consecutive number for each paragraph.",
-    )
-    parser.add_argument(
-        "-R",
-        "--README",
-        action="store_true",
-        help="Write out a 'README.md' file.",
-    )
-    return parser
+import click
 
 
+@click.command()
+@click.argument("input_filename", default="main.md", nargs=1)
+@click.option(
+    "--output_filename",
+    "-o",
+    default="main.docx",
+    help="Name of the output file. Its extension ('.docx' or '.pdf') determines the format. Default: 'main.docx'.",
+)
+@click.option(
+    "--refs_dirname",
+    envvar="REFERENCES",
+    help="Path to the directory containing the YAML files for references (articles, books).",
+)
+@click.option("--silent", "-s", is_flag=True, help="Output no execution information.")
+@click.option(
+    "--verbose", "-v", is_flag=True, help="Output more execution information."
+)
+@click.option(
+    "--paragraph_numbers",
+    "-p",
+    is_flag=True,
+    help="Write consecutive number for each paragraph.",
+)
+@click.option("--readme", is_flag=True, help="Write out a 'README.md' file.")
 def main(
     input_filename,
     output_filename,
@@ -79,19 +52,25 @@ def main(
     silent,
     verbose,
     paragraph_numbers,
-    README,
+    readme,
 ):
+    if silent:
+        verbose = False
+
     start_time = time.perf_counter()
     if not silent:
-        print(f"mdc {constants.__version__}")
+        click.echo(f"mdc {constants.__version__}")
+
+    try:
+        refs_dir = utils.ReferencesDir(refs_dirname)
+    except IOError:
+        sys.exit(f"Error: no such reference directory '{refs_dirname}'.")
 
     main = Text(input_filename)
+    if not silent:
+        click.echo(f"{len(main)} texts")
     if verbose:
-        print("Texts:")
-        print(main.contents(indent=2))
-    elif not silent:
-        print(f"{len(main)} texts")
-    refs_dir = utils.ReferencesDir(refs_dirname)
+        click.echo(main.contents(indent=2))
 
     format = pathlib.Path(output_filename).suffix.lstrip(".")
     match format:
@@ -100,21 +79,21 @@ def main(
         case "pdf":
             compiler = PdfCompiler(main, refs_dir, paragraph_numbers=paragraph_numbers)
         case _:
-            raise NotImplementedError(f"format {format}")
+            sys.exit("Error: unknown output file format '{format}'.")
 
     compiler.preprocess()
     if not silent:
-        print(f"Footnotes at end of {compiler.footnotes_location}.")
-        print(f"{len(compiler.referenced)} references used from '{refs_dirname}'.")
-        print(f"{len(compiler.indexed)} terms indexed.")
+        click.echo(f"Footnotes at end of {compiler.footnotes_location}.")
+        click.echo(f"{len(compiler.referenced)} references used from '{refs_dirname}'.")
+        click.echo(f"{len(compiler.indexed)} terms indexed.")
 
     compiler.write(output_filename)
     if not silent:
         if paragraph_numbers:
-            print(f"{compiler.paragraph_number} paragraphs.")
-        print(f"'{output_filename}' written.")
+            click.echo(f"{compiler.paragraph_number} paragraphs.")
+        click.echo(f"'{output_filename}' written.")
 
-    if README:
+    if readme:
         with open("README.md", "w") as outfile:
             outfile.write(main.title + "\n")
             outfile.write("=" * len(main.title) + "\n\n")
@@ -124,11 +103,11 @@ def main(
                 outfile.write(" " * 3 * len(subtext.ordinal))
                 outfile.write(f"{subtext.ordinal[-1]}. {subtext.title}\n\n")
         if not silent:
-            print("'README.md' written.")
+            click.echo("'README.md' written.")
 
     if verbose:
-        print(f"CPU time: {time.perf_counter() - start_time:.3f}s")
+        click.echo(f"CPU time: {time.perf_counter() - start_time:.3f}s")
 
 
 if __name__ == "__main__":
-    main(**vars(get_cli_parser().parse_args()))
+    main()
