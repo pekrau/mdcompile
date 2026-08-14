@@ -1,5 +1,6 @@
 asttokens==3.0.1
 charset-normalizer==3.4.9
+click==8.4.2
 colorama==0.4.6
 executing==2.2.1
 icecream==2.2.0
