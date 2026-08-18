@@ -48,6 +48,9 @@ class ReferencesDir:
         if not self.filepath.is_dir():
             raise IOError
 
+    def __len__(self):
+        return len(list(self.filepath.glob("*.yaml")))
+
     def __getitem__(self, name):
         "Return the reference given the name 'Lastname year'."
         filepath = self.filepath / f"{normalize(name)}.yaml"

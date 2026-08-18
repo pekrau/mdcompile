@@ -15,7 +15,7 @@ class Text:
 
     FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)
 
-    def __init__(self, filename, supertext=None, ordinal=1):
+    def __init__(self, filename, supertext=None, ordinal=1, print=None):
         "Read this Markdown file and any subtexts it specifies and convert into AST."
         self.filename = pathlib.Path(filename)
         self.supertext = supertext
@@ -23,6 +23,8 @@ class Text:
             self.ordinal = ()
         else:
             self.ordinal = supertext.ordinal + (ordinal,)
+        if print:
+            print(f"reading {filename}")
         content = self.filename.read_text()
         match = self.FRONTMATTER.match(content)
         if match:
@@ -40,7 +42,7 @@ class Text:
         # Read the subtexts, if any.
         self.subtexts = []
         for pos, filename in enumerate(self.frontmatter.get("subtexts", [])):
-            self.subtexts.append(Text(filename, supertext=self, ordinal=pos + 1))
+            self.subtexts.append(Text(filename, supertext=self, ordinal=pos + 1, print=print))
 
     def __repr__(self):
         return f'Text("{self.filename}")'
@@ -100,13 +102,6 @@ class Text:
     def elements(self):
         "Return an iterator over the AST elements of this text."
         return AstIterator(self.ast)
-
-    def contents(self, indent=0):
-        "Return the title of this text, and the titles of the subtexts indented."
-        titles = [f'{" " * indent}{self.title}'] + [
-            t.contents(indent + 2) for t in self.subtexts
-        ]
-        return "\n".join(titles)
 
 
 class AstIterator:

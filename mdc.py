@@ -22,7 +22,10 @@ import click
 
 
 @click.command()
-@click.argument("input_filename", default="main.md", nargs=1)
+@click.help_option("--help", "-h")
+@click.argument("input_filename",
+                type=click.Path(exists=True, readable=True, file_okay=True),
+                default="main.md", nargs=1)
 @click.option(
     "--output_filename",
     "-o",
@@ -31,6 +34,7 @@ import click
 )
 @click.option(
     "--refs_dirname",
+    type=click.Path(exists=True, readable=True, file_okay=False, dir_okay=True),
     envvar="REFERENCES",
     help="Path to the directory containing the YAML files for references (articles, books).",
 )
@@ -44,7 +48,7 @@ import click
     is_flag=True,
     help="Write consecutive number for each paragraph.",
 )
-@click.option("--readme", is_flag=True, help="Write out a 'README.md' file.")
+@click.option("--readme", "-r", is_flag=True, help="Write out a 'README.md' file.")
 def main(
     input_filename,
     output_filename,
@@ -63,14 +67,14 @@ def main(
 
     try:
         refs_dir = utils.ReferencesDir(refs_dirname)
+        if verbose:
+            click.echo(f"{len(refs_dir)} references in '{refs_dirname}'.")
     except IOError:
         sys.exit(f"Error: no such reference directory '{refs_dirname}'.")
 
-    main = Text(input_filename)
+    main = Text(input_filename, print=click.echo if verbose else None)
     if not silent:
         click.echo(f"{len(main)} texts")
-    if verbose:
-        click.echo(main.contents(indent=2))
 
     format = pathlib.Path(output_filename).suffix.lstrip(".")
     match format:
@@ -79,19 +83,19 @@ def main(
         case "pdf":
             compiler = PdfCompiler(main, refs_dir, paragraph_numbers=paragraph_numbers)
         case _:
-            sys.exit("Error: unknown output file format '{format}'.")
+            sys.exit("Error: unknown output file format '{format}'")
 
     compiler.preprocess()
     if not silent:
-        click.echo(f"Footnotes at end of {compiler.footnotes_location}.")
-        click.echo(f"{len(compiler.referenced)} references used from '{refs_dirname}'.")
-        click.echo(f"{len(compiler.indexed)} terms indexed.")
+        click.echo(f"footnotes at end of {compiler.footnotes_location}")
+        click.echo(f"{len(compiler.referenced)} references used from '{refs_dirname}'")
+        click.echo(f"{len(compiler.indexed)} terms indexed")
 
     compiler.write(output_filename)
     if not silent:
         if paragraph_numbers:
-            click.echo(f"{compiler.paragraph_number} paragraphs.")
-        click.echo(f"'{output_filename}' written.")
+            click.echo(f"{compiler.paragraph_number} paragraphs")
+        click.echo(f"'{output_filename}' written")
 
     if readme:
         with open("README.md", "w") as outfile:
@@ -103,7 +107,17 @@ def main(
                 outfile.write(" " * 3 * len(subtext.ordinal))
                 outfile.write(f"{subtext.ordinal[-1]}. {subtext.title}\n\n")
         if not silent:
-            click.echo("'README.md' written.")
+            click.echo("'README.md' written")
+
+    if not silent:
+        input_filename = pathlib.Path(input_filename)
+        all_md_filenames = set([str(n) for n in input_filename.parent.glob("*.md")])
+        all_md_filenames.discard("README.md")
+        all_text_filenames = set([str(t.filename) for t in main])
+        if unread := all_md_filenames.difference(all_text_filenames):
+            click.echo("Files not included:")
+            for filename in sorted(unread):
+                click.echo(f"  {filename}")
 
     if verbose:
         click.echo(f"CPU time: {time.perf_counter() - start_time:.3f}s")
