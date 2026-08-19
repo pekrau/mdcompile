@@ -104,8 +104,8 @@ def main(
             for subtext in main:
                 if subtext is main:
                     continue
-                outfile.write(" " * 3 * len(subtext.ordinal))
-                outfile.write(f"{subtext.ordinal[-1]}. {subtext.title}\n\n")
+                outfile.write(" " * 5 * (len(subtext.ordinal) - 1))
+                outfile.write(f"{subtext.ordinal[-1]}. {subtext.title}\n")
         if not silent:
             click.echo("'README.md' written")
 

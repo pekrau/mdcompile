@@ -2,7 +2,7 @@
 
 import string
 
-VERSION = (0, 3, 5)
+VERSION = (0, 3, 6)
 __version__ = ".".join([str(n) for n in VERSION])
 
 EM_DASH = "\u2014"
