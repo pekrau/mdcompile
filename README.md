@@ -11,7 +11,7 @@ Options:
   -h, --help                  Show this message and exit.
   -o, --output_filename TEXT  Name of the output file. Its extension ('.docx'
                               or '.pdf') determines the format. Default:
-                              'main.docx'.
+                              'ms.docx'.
   --refs_dirname DIRECTORY    Path to the directory containing the YAML files
                               for references (articles, books).
   -s, --silent                Output no execution information.

@@ -29,8 +29,8 @@ import click
 @click.option(
     "--output_filename",
     "-o",
-    default="main.docx",
-    help="Name of the output file. Its extension ('.docx' or '.pdf') determines the format. Default: 'main.docx'.",
+    default="ms.docx",
+    help="Name of the output file. Its extension ('.docx' or '.pdf') determines the format. Default: 'ms.docx'.",
 )
 @click.option(
     "--refs_dirname",
