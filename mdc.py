@@ -23,9 +23,12 @@ import click
 
 @click.command()
 @click.help_option("--help", "-h")
-@click.argument("input_filename",
-                type=click.Path(exists=True, readable=True, file_okay=True),
-                default="main.md", nargs=1)
+@click.argument(
+    "input_filename",
+    type=click.Path(exists=True, readable=True, file_okay=True),
+    default="main.md",
+    nargs=1,
+)
 @click.option(
     "--output_filename",
     "-o",

@@ -32,7 +32,7 @@ class Compiler:
         self.footnotes_location = fm.get("footnotes-location", constants.FOOTNOTES_TEXT)
 
     def preprocess(self):
-        "Collect references, indexes and footnotes."
+        "Collect references, indexes, footnotes and internal links."
         self.referenced = {}
         for text in self.main:
             for element in text.elements():
@@ -92,6 +92,23 @@ class Compiler:
                             )
                         self.main.footnotes.update(text.footnotes)
                         text.footnotes.clear()
+
+        self.internal_anchors = {}
+        for text in self.main:
+            for element in text.elements():
+                if element["element"] == "internal_anchor":
+                    if element["anchor"] in self.internal_anchors:
+                        raise ValueError(
+                            f"multiple uses of internal anchor {element.anchor}"
+                        )
+                    self.internal_anchors[element["anchor"]] = text.ordinal_title
+        for text in self.main:
+            for element in text.elements():
+                if element["element"] == "internal_link":
+                    try:
+                        element["location"] = self.internal_anchors[element["anchor"]]
+                    except KeyError:
+                        element["location"] = "unknown anchor"
 
     def numbered_title(self, text, force=False):
         "Return the title with a number prefix."

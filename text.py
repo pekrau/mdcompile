@@ -42,7 +42,9 @@ class Text:
         # Read the subtexts, if any.
         self.subtexts = []
         for pos, filename in enumerate(self.frontmatter.get("subtexts", [])):
-            self.subtexts.append(Text(filename, supertext=self, ordinal=pos + 1, print=print))
+            self.subtexts.append(
+                Text(filename, supertext=self, ordinal=pos + 1, print=print)
+            )
 
     def __repr__(self):
         return f'Text("{self.filename}")'
@@ -88,6 +90,11 @@ class Text:
     def title(self):
         "The title for this text."
         return self.frontmatter.get("title") or self.filename.stem.replace("_", " ")
+
+    @property
+    def ordinal_title(self):
+        "The title for this text with the text ordinal prepended."
+        return f"{'.'.join([str(i) for i in self.ordinal])}. {self.title}"
 
     @property
     def subtitle(self):

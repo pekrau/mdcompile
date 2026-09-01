@@ -2,7 +2,7 @@
 
 import string
 
-VERSION = (0, 3, 6)
+VERSION = (0, 4, 0)
 __version__ = ".".join([str(n) for n in VERSION])
 
 EM_DASH = "\u2014"
@@ -40,6 +40,7 @@ LEXICON = {
         "index": "register",
         "footnotes": "fotnoter",
         "accessed": "läst",
+        "notes": "anteckningar",
     }
 }
 for k, v in list(LEXICON[SV_SE].items()):  # 'list': Avoid update collision issues.

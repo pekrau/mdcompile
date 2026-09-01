@@ -60,7 +60,7 @@ class EmdashRenderer:
 class Indexed(marko.inline.InlineElement):
     "Markdown extension for an indexed term."
 
-    pattern = re.compile(r"\[#(.+?)(\|(.+?))?\]", re.S)  # Yes, this isn't quite right.
+    pattern = re.compile(r"\[#(.+?)(\|(.+?))?\]")  # Yes, this isn't quite right.
     parse_children = False
 
     def __init__(self, match):
@@ -106,13 +106,55 @@ class ThematicBreakRenderer:
         return '<hr class="break" />\n'
 
 
+class InternalAnchor(marko.inline.InlineElement):
+    "Location in document to link to."
+
+    pattern = re.compile(r"\[§(.+)\]")
+    parse_children = False
+
+    def __init__(self, match):
+        self.anchor = match.group(1)
+
+
+class InternalAnchorRenderer:
+    "Output a location in document to link to."
+
+    def render_internal_anchor(self, element):
+        return f'<a name="{element.anchor}"/>'
+
+
+class InternalLink(marko.inline.InlineElement):
+    "Link to an internal location."
+
+    pattern = re.compile(r"\[:(.+)\]")
+    parse_children = False
+
+    def __init__(self, match):
+        self.anchor = match.group(1)
+
+
+class InternalLinkRenderer:
+    "Output a link to a location in document."
+
+    def render_internal_link(self, element):
+        return f'<a href="#{element.anchor}">{element.location}</a>'  # XXX ?
+
+
 def to_ast(content):
     "Convert Markdown content into an AST (Abstract Syntax Tree) structure."
     converter = marko.Markdown(renderer=marko.ast_renderer.ASTRenderer)
     converter.use("footnote")
     converter.use(
         marko.helpers.MarkoExtension(
-            elements=[Subscript, Superscript, Emdash, Indexed, Reference],
+            elements=[
+                Subscript,
+                Superscript,
+                Emdash,
+                Indexed,
+                Reference,
+                InternalAnchor,
+                InternalLink,
+            ],
         )
     )
     ast = converter.convert(content)
@@ -133,6 +175,8 @@ def to_html(content):
                 Emdash,
                 Indexed,
                 Reference,
+                InternalAnchor,
+                InternalLink,
             ],
             renderer_mixins=[
                 SubscriptRenderer,
@@ -141,6 +185,8 @@ def to_html(content):
                 IndexedRenderer,
                 ReferenceRenderer,
                 ThematicBreakRenderer,
+                InternalAnchorRenderer,
+                InternalLinkRenderer,
             ],
         )
     )

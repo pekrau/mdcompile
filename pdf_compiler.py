@@ -230,14 +230,12 @@ class PdfCompiler(Compiler):
         self.flowables.append(Preformatted(text, style=self.stylesheet[stylename]))
 
     def write_heading(self, heading, level, anchor=None):
-        """Add heading given the level.
-        If the anchor is given, create TOC entry and anchor.
-        """
+        "Add heading given the level. Create TOC entry and anchor, if defined."
         level = min(level, constants.MAX_LEVEL)
         if anchor:
             if level <= self.toc_level:
                 self.flowables.append(TocMarker(level - 1, heading, anchor))
-            heading = f'<a name="__anchor__{anchor}"/>' + heading
+            heading = f'<a name="__{anchor}__"/>' + heading
         self.write_paragraph(heading, stylename=f"Heading{level}")
 
     def write_page_break(self):
@@ -314,7 +312,7 @@ class PdfCompiler(Compiler):
         self.para_text(f" {reference['title']}")
         if url := reference.get("url"):
             self.para_text(
-                f' <link href="{url}" underline="true" color="blue">{url}</link>'
+                f' <link href="{url}" underline="true" color="royalblue">{url}</link>'
             )
             if accessed := reference.get("accessed"):
                 self.para_text(f" ({self.tx('accessed')} {accessed})")
@@ -351,7 +349,7 @@ class PdfCompiler(Compiler):
         self.para_stack.append(([], stylename, preformatted))
 
     def para_pop(self, stylename=None, preformatted=None, add=True):
-        "Write out paragraph containing the saved-up text."
+        "Write out the paragraph containing the saved-up text."
         popped = self.para_stack.pop()
         parts = popped[0]
         if stylename is None:
@@ -377,7 +375,7 @@ class PdfCompiler(Compiler):
             return Paragraph(text, style=self.stylesheet[stylename])
 
     def para_text(self, text):
-        "Add text to container on top of stack."
+        "Add text to the container on top of the stack."
         self.para_stack[-1][0].append(text)
 
     def display_page_number(self, canvas, doc):
@@ -656,6 +654,14 @@ class PdfCompiler(Compiler):
         self.para_text(f'<link href="#{ast["name"]}"><b>{ast["name"]}</b></link>')
         reference = self.referenced[ast["name"]]
         self.para_text(f": <i>{reference['title']}</i>")
+
+    def render_internal_anchor(self, ast):
+        self.para_text(f'<a name="{ast["anchor"]}"/>')
+
+    def render_internal_link(self, ast):
+        self.para_text(
+            f'<link href="#{ast["anchor"]}" color="red">{ast["location"]}</link>'
+        )
 
 
 class TocDocTemplate(SimpleDocTemplate):

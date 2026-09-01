@@ -287,6 +287,7 @@ class DocxCompiler(Compiler):
                 paragraph.add_run(published)
 
     def write_reference_link(self, paragraph, reference):
+        "Write reference which is a URL to a website."
         paragraph.add_run(reference["title"]).font.italic = True
         if url := reference.get("url"):
             paragraph.add_run(", ")
@@ -341,13 +342,9 @@ class DocxCompiler(Compiler):
         )
         # Create the w:hyperlink tag and add needed values
         hyperlink = docx.oxml.shared.OxmlElement("w:hyperlink")
-        hyperlink.set(
-            docx.oxml.shared.qn("r:id"),
-            r_id,
-        )
+        hyperlink.set(docx.oxml.shared.qn("r:id"), r_id)
         hyperlink.append(run._r)
         paragraph._p.insert(len(paragraph.runs) + 2, hyperlink)
-        # run.font.color.rgb = docx.shared.RGBColor(34, 34, 255)
         run.font.color.rgb = docx.shared.RGBColor(65, 105, 225)
         run.font.underline = True
 
@@ -631,5 +628,9 @@ class DocxCompiler(Compiler):
         reference = self.referenced[ast["name"]]
         self.current_paragraph.add_run(reference["title"]).font.italic = True
 
-    def render_link_ref_def(self, ast):
+    def render_internal_anchor(self, ast):
         pass
+
+    def render_internal_link(self, ast):
+        run = self.current_paragraph.add_run(ast["location"])
+        run.font.color.rgb = docx.shared.RGBColor(225, 0, 0)
