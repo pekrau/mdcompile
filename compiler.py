@@ -21,10 +21,11 @@ class Compiler:
             self.paragraph_number = None
         self.silent = silent
 
+        # Translator.
+        self.tx = utils.Tx(self.main.language)
+
         # Output parameters from main text frontmatter.
         fm = self.main.frontmatter
-        self.language = fm.get("language", constants.SV_SE)
-        self.tx = utils.Tx(self.language)
         self.toc_level = max(0, fm.get("toc-level", 1))
         self.page_break_level = max(0, fm.get("page-break-level", 1))
         self.text_number_level = max(0, fm.get("text-number-level", 1))

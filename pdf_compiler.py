@@ -171,7 +171,7 @@ class PdfCompiler(Compiler):
                     title=self.main.title,
                     author=", ".join(self.main.authors) or None,
                     creator=f"mdcompile {constants.__version__}",
-                    lang=self.language,
+                    lang=self.main.language,
                 )
 
                 if self.indexed:
@@ -190,7 +190,7 @@ class PdfCompiler(Compiler):
                     title=self.main.title,
                     author=", ".join(self.main.authors) or None,
                     creator=f"mdcompile {constants.__version__}",
-                    lang=self.language,
+                    lang=self.main.language,
                 )
                 if self.indexed:
                     document.build(

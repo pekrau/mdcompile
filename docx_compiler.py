@@ -24,11 +24,10 @@ class DocxCompiler(Compiler):
 
         # Set the default document-wide language.
         # From https://stackoverflow.com/questions/36967416/how-can-i-set-the-language-in-text-with-python-docx
-        if self.language:
-            styles_element = self.doc.styles.element
-            rpr_default = styles_element.xpath("./w:docDefaults/w:rPrDefault/w:rPr")[0]
-            lang_default = rpr_default.xpath("w:lang")[0]
-            lang_default.set(docx.oxml.shared.qn("w:val"), self.language)
+        styles_element = self.doc.styles.element
+        rpr_default = styles_element.xpath("./w:docDefaults/w:rPrDefault/w:rPr")[0]
+        lang_default = rpr_default.xpath("w:lang")[0]
+        lang_default.set(docx.oxml.shared.qn("w:val"), self.main.language)
 
         # Set to A4 page size. XXX Allow alternatives.
         section = self.doc.sections[0]
@@ -99,8 +98,7 @@ class DocxCompiler(Compiler):
         self.doc.core_properties.author = ", ".join(self.main.authors)
         self.doc.core_properties.created = dt.datetime.now()
         self.doc.core_properties.modified = self.main.modified
-        if self.language:
-            self.doc.core_properties.language = self.language
+        self.doc.core_properties.language = self.main.language
 
         # Display page number in the DOCX header.
         # https://stackoverflow.com/questions/56658872/add-page-number-using-python-docx

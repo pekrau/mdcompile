@@ -23,6 +23,11 @@ class Text:
             self.ordinal = ()
         else:
             self.ordinal = supertext.ordinal + (ordinal,)
+        self.read_content(print=print)
+        self.read_subtexts(print=print)
+
+    def read_content(self, print=None):
+        "Read content and front matter. Compile to AST."
         if print:
             print(f"reading {filename}")
         content = self.filename.read_text()
@@ -35,11 +40,13 @@ class Text:
             self.text = content
         self.ast = markdown.to_ast(self.text)
         # The link definitions are included in-place in the AST.
-        # This item in the AST is redundant; remove.
+        # This item in the AST is redundant; remove it.
         self.ast.pop("link_ref_defs", None)
         # Store the footnote definitions for later handling.
         self.footnotes = self.ast.pop("footnotes", {})
-        # Read the subtexts, if any.
+
+    def read_subtexts(self, print=None):
+        "Read the subtexts, if any."
         self.subtexts = []
         for pos, filename in enumerate(self.frontmatter.get("subtexts", [])):
             self.subtexts.append(
@@ -77,6 +84,10 @@ class Text:
             result += 1
             supertext = supertext.supertext
         return result
+
+    @property
+    def language(self):
+        return self.main.frontmatter.get("language", constants.SV_SE)
 
     @property
     def modified(self):

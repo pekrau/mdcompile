@@ -51,6 +51,9 @@ import click
     is_flag=True,
     help="Write consecutive number for each paragraph.",
 )
+@click.option(
+    "--notes", "-n", is_flag=True, help="Collect all non-included MD files as notes."
+)
 @click.option("--readme", "-r", is_flag=True, help="Write out a 'README.md' file.")
 def main(
     input_filename,
@@ -59,6 +62,7 @@ def main(
     silent,
     verbose,
     paragraph_numbers,
+    notes,
     readme,
 ):
     if silent:
@@ -75,9 +79,37 @@ def main(
     except IOError:
         sys.exit(f"Error: no such reference directory '{refs_dirname}'.")
 
-    main = Text(input_filename, print=click.echo if verbose else None)
+    print = click.echo if verbose else None
+    main = Text(input_filename, print=print)
     if not silent:
-        click.echo(f"{len(main)} texts")
+        click.echo(f"{len(main)} texts included via '{input_filename}'")
+
+    input_filename = pathlib.Path(input_filename)
+    all_md_filenames = set([str(n) for n in input_filename.parent.glob("*.md")])
+    all_md_filenames.discard("README.md")
+    all_md_filenames.discard("__notes__.md")
+    all_text_filenames = set([str(t.filename) for t in main])
+    if unincluded := list(all_md_filenames.difference(all_text_filenames)):
+        tx = utils.Tx(main.language)
+        unincluded.sort()
+        if notes:
+            lines = ["---", f"title: {tx('Notes')}"]
+            if unincluded:
+                lines.append("subtexts:")
+                for filename in unincluded:
+                    lines.append(f"- {filename}")
+                lines.append("---")
+                lines.append("")
+            notes_filename = pathlib.Path(input_filename).parent / "__notes__.md"
+            notes_filename.write_text("\n".join(lines))
+            notes = Text(
+                notes_filename, supertext=main, ordinal=len(main.subtexts), print=print
+            )
+            main.subtexts.append(notes)
+        elif not silent:
+            click.echo("Files not included:")
+            for filename in unincluded:
+                click.echo(f"  {filename}")
 
     format = pathlib.Path(output_filename).suffix.lstrip(".")
     match format:
@@ -112,15 +144,15 @@ def main(
         if not silent:
             click.echo("'README.md' written")
 
-    if not silent:
-        input_filename = pathlib.Path(input_filename)
-        all_md_filenames = set([str(n) for n in input_filename.parent.glob("*.md")])
-        all_md_filenames.discard("README.md")
-        all_text_filenames = set([str(t.filename) for t in main])
-        if unread := all_md_filenames.difference(all_text_filenames):
-            click.echo("Files not included:")
-            for filename in sorted(unread):
-                click.echo(f"  {filename}")
+    # if not silent:
+    #     input_filename = pathlib.Path(input_filename)
+    #     all_md_filenames = set([str(n) for n in input_filename.parent.glob("*.md")])
+    #     all_md_filenames.discard("README.md")
+    #     all_text_filenames = set([str(t.filename) for t in main])
+    #     if unread := all_md_filenames.difference(all_text_filenames):
+    #         click.echo("Files not included:")
+    #         for filename in sorted(unread):
+    #             click.echo(f"  {filename}")
 
     if verbose:
         click.echo(f"CPU time: {time.perf_counter() - start_time:.3f}s")
