@@ -94,29 +94,26 @@ class Compiler:
                         self.main.footnotes.update(text.footnotes)
                         text.footnotes.clear()
 
-        self.internal_anchors = {}
+        self.section_titles = {}
         for text in self.main:
-            for element in text.elements():
-                if element["element"] == "internal_anchor":
-                    if element["anchor"] in self.internal_anchors:
-                        raise ValueError(
-                            f"multiple uses of internal anchor {element.anchor}"
-                        )
-                    self.internal_anchors[element["anchor"]] = text.ordinal_title
+            if text is self.main:
+                continue
+            key = text.title.casefold().replace(" ", "_")
+            if key in self.section_titles:
+                raise ValueError(f"multiple uses of title '{text.title}'")
+            self.section_titles[key] = text.ordinal_title
+
         for text in self.main:
             for element in text.elements():
                 if element["element"] == "internal_link":
+                    target = element["target"].casefold().replace(" ", "_")
                     try:
-                        element["location"] = self.internal_anchors[element["anchor"]]
+                        element["section"] = self.section_titles[target]
                     except KeyError:
-                        element["location"] = "unknown anchor"
-
-    def numbered_title(self, text, force=False):
-        "Return the title with a number prefix."
-        if text.level <= self.text_number_level or force:
-            return f"{'.'.join([str(i) for i in text.ordinal])}. {text.title}"
-        else:
-            return text.title
+                        for key, title in self.section_titles.items():
+                            if key.startswith(target):
+                                element["section"] = title
+                                break
 
     def write(self, filename=None):
         "Convert the main text and its subtexts, if any, into the format."

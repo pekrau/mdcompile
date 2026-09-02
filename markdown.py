@@ -106,31 +106,14 @@ class ThematicBreakRenderer:
         return '<hr class="break" />\n'
 
 
-class InternalAnchor(marko.inline.InlineElement):
-    "Location in document to link to."
-
-    pattern = re.compile(r"\[§(.+)\]")
-    parse_children = False
-
-    def __init__(self, match):
-        self.anchor = match.group(1)
-
-
-class InternalAnchorRenderer:
-    "Output a location in document to link to."
-
-    def render_internal_anchor(self, element):
-        return f'<a name="{element.anchor}"/>'
-
-
 class InternalLink(marko.inline.InlineElement):
     "Link to an internal location."
 
-    pattern = re.compile(r"\[:(.+)\]")
+    pattern = re.compile(r"\[:\s*([^\]]+)\s*\]")
     parse_children = False
 
     def __init__(self, match):
-        self.anchor = match.group(1)
+        self.target = match.group(1)
 
 
 class InternalLinkRenderer:
@@ -152,7 +135,6 @@ def to_ast(content):
                 Emdash,
                 Indexed,
                 Reference,
-                InternalAnchor,
                 InternalLink,
             ],
         )
@@ -175,7 +157,6 @@ def to_html(content):
                 Emdash,
                 Indexed,
                 Reference,
-                InternalAnchor,
                 InternalLink,
             ],
             renderer_mixins=[
@@ -185,7 +166,6 @@ def to_html(content):
                 IndexedRenderer,
                 ReferenceRenderer,
                 ThematicBreakRenderer,
-                InternalAnchorRenderer,
                 InternalLinkRenderer,
             ],
         )

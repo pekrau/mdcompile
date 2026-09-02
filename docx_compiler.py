@@ -152,7 +152,11 @@ class DocxCompiler(Compiler):
                     paragraph.paragraph_format.first_line_indent = -docx.shared.Pt(
                         constants.DOCX_TOC_INDENT
                     )
-                    paragraph.add_run(self.numbered_title(text))
+                    if text.level <= self.text_number_level:
+                        title = text.ordinal_title
+                    else:
+                        title = text.title
+                    paragraph.add_run(title)
 
             # Write entries for book footnotes, references and indexed, if any such.
             if (
@@ -189,7 +193,11 @@ class DocxCompiler(Compiler):
         "Write the contents of the text instance."
         if text.level <= self.page_break_level:
             self.write_page_break()
-        self.write_heading(self.numbered_title(text), text.level)
+        if text.level <= self.text_number_level:
+            title = text.ordinal_title
+        else:
+            title = text.title
+        self.write_heading(title, text.level)
         if text.subtitle:
             self.write_heading(text.subtitle, text.level + 1)
 
@@ -318,9 +326,7 @@ class DocxCompiler(Compiler):
             paragraph = self.doc.add_paragraph(canonical, style="Body Text")
             paragraph.paragraph_format.keep_with_next = True
             for text in texts:
-                paragraph = self.doc.add_paragraph(
-                    self.numbered_title(text, force=True), style="Body Text"
-                )
+                paragraph = self.doc.add_paragraph(text.ordinal_title,style="Body Text")
                 paragraph.paragraph_format.left_indent = docx.shared.Pt(
                     constants.DOCX_INDEXED_INDENT
                 )
@@ -626,9 +632,6 @@ class DocxCompiler(Compiler):
         reference = self.referenced[ast["name"]]
         self.current_paragraph.add_run(reference["title"]).font.italic = True
 
-    def render_internal_anchor(self, ast):
-        pass
-
     def render_internal_link(self, ast):
-        run = self.current_paragraph.add_run(ast["location"])
+        run = self.current_paragraph.add_run(ast["section"])
         run.font.color.rgb = docx.shared.RGBColor(225, 0, 0)

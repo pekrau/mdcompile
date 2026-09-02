@@ -156,7 +156,7 @@ class PdfCompiler(Compiler):
         if self.footnotes_location == constants.FOOTNOTES_BOOK:
             if self.main.footnotes:
                 self.write_page_break()
-                self.write_heading(self.tx("Footnotes"), 1, anchor="footnotes")
+                self.write_heading(self.tx("Footnotes"), 1, target="__footnotes__")
                 self.write_footnotes(self.main)
 
         self.write_referenced()
@@ -206,11 +206,11 @@ class PdfCompiler(Compiler):
     def write_text(self, text):
         if text.level <= self.page_break_level:
             self.write_page_break()
-        if text.level <= self.toc_level:
-            anchor = text.ordinal
+        if text.level <= self.text_number_level:
+            title = text.ordinal_title
         else:
-            anchor = None
-        self.write_heading(self.numbered_title(text), text.level, anchor=anchor)
+            title = text.title
+        self.write_heading(title, text.level, target=text.title.casefold())
         if text.subtitle:
             self.write_heading(text.subtitle, text.level + 1)
 
@@ -229,13 +229,13 @@ class PdfCompiler(Compiler):
     def write_preformatted(self, text, stylename="Normal"):
         self.flowables.append(Preformatted(text, style=self.stylesheet[stylename]))
 
-    def write_heading(self, heading, level, anchor=None):
-        "Add heading given the level. Create TOC entry and anchor, if defined."
+    def write_heading(self, heading, level, target=None):
+        "Add heading given the level. Create TOC entry and link target, if defined."
         level = min(level, constants.MAX_LEVEL)
-        if anchor:
+        if target:
             if level <= self.toc_level:
-                self.flowables.append(TocMarker(level - 1, heading, anchor))
-            heading = f'<a name="__{anchor}__"/>' + heading
+                self.flowables.append(TocMarker(level - 1, heading, target))
+            heading = f'<a name="{target}"/>' + heading
         self.write_paragraph(heading, stylename=f"Heading{level}")
 
     def write_page_break(self):
@@ -254,7 +254,7 @@ class PdfCompiler(Compiler):
         if not self.referenced:
             return
         self.write_page_break()
-        self.write_heading(self.tx("References"), 1, anchor="references")
+        self.write_heading(self.tx("References"), 1, target="__references__")
         for name, reference in sorted(self.referenced.items()):
             self.para_push("Reference")
             self.para_text(f'<a name="{name}"/><b>{name}</b>')
@@ -339,7 +339,7 @@ class PdfCompiler(Compiler):
         if not self.indexed:
             return None
         self.write_page_break()
-        self.write_heading(self.tx("Index"), 1, anchor="index")
+        self.write_heading(self.tx("Index"), 1, target="__index__")
         result = SimpleIndex(style=self.stylesheet["Index"], headers=False)
         self.flowables.append(result)
         return result
@@ -655,13 +655,13 @@ class PdfCompiler(Compiler):
         reference = self.referenced[ast["name"]]
         self.para_text(f": <i>{reference['title']}</i>")
 
-    def render_internal_anchor(self, ast):
-        self.para_text(f'<a name="{ast["anchor"]}"/>')
-
     def render_internal_link(self, ast):
-        self.para_text(
-            f'<link href="#{ast["anchor"]}" color="red">{ast["location"]}</link>'
-        )
+        try:
+            self.para_text(
+                f'<link href="#{ast["target"]}" color="red">{ast["section"]}</link>'
+            )
+        except KeyError:
+            self.para_text(f"""<font color="red">Dead link '{ast['target']}'</font>""")
 
 
 class TocDocTemplate(SimpleDocTemplate):

@@ -84,8 +84,7 @@ def main(
     if not silent:
         click.echo(f"{len(main)} texts included via '{input_filename}'")
 
-    input_filename = pathlib.Path(input_filename)
-    all_md_filenames = set([str(n) for n in input_filename.parent.glob("*.md")])
+    all_md_filenames = set([str(n) for n in main.filename.parent.glob("*.md")])
     all_md_filenames.discard("README.md")
     all_md_filenames.discard("__notes__.md")
     all_text_filenames = set([str(t.filename) for t in main])
@@ -100,7 +99,7 @@ def main(
                     lines.append(f"- {filename}")
                 lines.append("---")
                 lines.append("")
-            notes_filename = pathlib.Path(input_filename).parent / "__notes__.md"
+            notes_filename = main.filename.parent / "__notes__.md"
             notes_filename.write_text("\n".join(lines))
             notes = Text(
                 notes_filename, supertext=main, ordinal=len(main.subtexts), print=print
@@ -130,7 +129,7 @@ def main(
     if not silent:
         if paragraph_numbers:
             click.echo(f"{compiler.paragraph_number} paragraphs")
-        click.echo(f"'{output_filename}' written")
+        click.echo(f"{output_filename} written")
 
     if readme:
         with open("README.md", "w") as outfile:
@@ -142,17 +141,7 @@ def main(
                 outfile.write(" " * 5 * (len(subtext.ordinal) - 1))
                 outfile.write(f"{subtext.ordinal[-1]}. {subtext.title}\n")
         if not silent:
-            click.echo("'README.md' written")
-
-    # if not silent:
-    #     input_filename = pathlib.Path(input_filename)
-    #     all_md_filenames = set([str(n) for n in input_filename.parent.glob("*.md")])
-    #     all_md_filenames.discard("README.md")
-    #     all_text_filenames = set([str(t.filename) for t in main])
-    #     if unread := all_md_filenames.difference(all_text_filenames):
-    #         click.echo("Files not included:")
-    #         for filename in sorted(unread):
-    #             click.echo(f"  {filename}")
+            click.echo("README.md written")
 
     if verbose:
         click.echo(f"CPU time: {time.perf_counter() - start_time:.3f}s")
