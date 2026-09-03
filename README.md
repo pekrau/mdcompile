@@ -14,10 +14,7 @@ Options:
                               'ms.docx'.
   --refs_dirname DIRECTORY    Path to the directory containing the YAML files
                               for references (articles, books).
-  -s, --silent                Output no execution information.
-  -v, --verbose               Output more execution information.
   -p, --paragraph_numbers     Write consecutive number for each paragraph.
-  -n, --notes                 Collect all non-included MD files as notes.
   -r, --readme                Write out a 'README.md' file.
 ```
 

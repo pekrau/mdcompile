@@ -15,21 +15,29 @@ class Text:
 
     FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)
 
-    def __init__(self, filename, supertext=None, ordinal=1, print=None):
+    def __init__(self, filename, supertext=None, ordinal=1):
         "Read this Markdown file and any subtexts it specifies and convert into AST."
-        self.filename = pathlib.Path(filename)
+        # Ensure '.md' suffix.
+        filename = pathlib.Path(filename).with_suffix(".md")
+        # Try filename and variants thereof
+        for fn in [filename,
+                   filename.with_stem(filename.stem.replace(" ", "_")),
+                   filename.with_stem(filename.stem.replace("_", " "))]:
+            if fn.exists():
+                self.filename = fn
+                break
+        else:
+            raise OSError(f"no such file '{filename}'")
         self.supertext = supertext
         if supertext is None:
             self.ordinal = ()
         else:
             self.ordinal = supertext.ordinal + (ordinal,)
-        self.read_content(print=print)
-        self.read_subtexts(print=print)
+        self.read_content()
+        self.read_subtexts()
 
-    def read_content(self, print=None):
+    def read_content(self):
         "Read content and front matter. Compile to AST."
-        if print:
-            print(f"reading {filename}")
         content = self.filename.read_text()
         match = self.FRONTMATTER.match(content)
         if match:
@@ -45,13 +53,11 @@ class Text:
         # Store the footnote definitions for later handling.
         self.footnotes = self.ast.pop("footnotes", {})
 
-    def read_subtexts(self, print=None):
+    def read_subtexts(self):
         "Read the subtexts, if any."
         self.subtexts = []
         for pos, filename in enumerate(self.frontmatter.get("subtexts", [])):
-            self.subtexts.append(
-                Text(filename, supertext=self, ordinal=pos + 1, print=print)
-            )
+            self.subtexts.append(Text(filename, supertext=self, ordinal=pos + 1))
 
     def __repr__(self):
         return f'Text("{self.filename}")'
