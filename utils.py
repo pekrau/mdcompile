@@ -18,6 +18,20 @@ def normalize(s):
     return result.casefold()
 
 
+def parse_md(filepath):
+    "Read the Markdown file, parse, and return the frontmatter and text."
+    assert filepath.exists(), filepath
+    assert filepath.suffix == ".md", filepath
+    content = filepath.read_text()
+    match = constants.FRONTMATTER.match(content)
+    if match:
+        frontmatter = yaml.safe_load(match.group(1))
+        text = content[match.start(2) :]
+    else:
+        frontmatter = {}
+        text = content
+    return (frontmatter, text)
+
 def isoformat(datetime=None):
     "ISO format date, no seconds."
     if datetime is None:
@@ -36,24 +50,3 @@ class Tx:
             return constants.LEXICON[self.language][word]
         except KeyError:
             return word
-
-
-class ReferencesDir:
-    "Reference files stored in a named directory."
-
-    def __init__(self, filepath):
-        self.filepath = pathlib.Path(filepath)
-        if not self.filepath.exists():
-            raise IOError
-        if not self.filepath.is_dir():
-            raise IOError
-
-    def __len__(self):
-        return len(list(self.filepath.glob("*.yaml")))
-
-    def __getitem__(self, name):
-        "Return the reference given the name 'Lastname year'."
-        filepath = self.filepath / f"{normalize(name)}.yaml"
-        if not filepath.exists():
-            raise KeyError(f"no such reference: '{name}'")
-        return yaml.safe_load(filepath.read_text())

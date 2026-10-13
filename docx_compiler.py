@@ -275,22 +275,21 @@ class DocxCompiler(Compiler):
         if volume := reference.get("volume"):
             paragraph.add_run(" ")
             paragraph.add_run(volume).font.bold = True
-        if issue := reference.get("issue"):
+        if issue := reference.get("number"):
             paragraph.add_run(f" ({issue})")
         if pages := reference.get("pages"):
             paragraph.add_run(" ")
-            paragraph.add_run(pages.replace("--", "-"))
+            paragraph.add_run(pages)
 
     def write_reference_book(self, paragraph, reference):
         paragraph.add_run(reference["title"]).font.italic = True
-        if edition := reference.get("edition"):
-            paragraph.add_run(",")
-            if publisher := edition.get("publisher"):
-                paragraph.add_run(" ")
-                paragraph.add_run(publisher)
-            if published := edition.get("published"):
-                paragraph.add_run(" ")
-                paragraph.add_run(published)
+        paragraph.add_run(",")
+        if publisher := reference.get("publisher"):
+            paragraph.add_run(" ")
+            paragraph.add_run(publisher)
+        if published := reference.get("published"):
+            paragraph.add_run(" ")
+            paragraph.add_run(published.split("-")[0])
 
     def write_reference_link(self, paragraph, reference):
         "Write reference which is a URL to a website."
@@ -306,7 +305,7 @@ class DocxCompiler(Compiler):
         if url := reference.get("url"):
             paragraph.add_run(" ")
             self.add_hyperlink(paragraph, url, url)
-        for key, (label, template) in constants.REFS_LINKS.items():
+        for key, (label, template) in constants.EXTERNAL_LINKS.items():
             try:
                 value = reference[key]
                 url = template.format(value=value)
@@ -629,8 +628,11 @@ class DocxCompiler(Compiler):
     def render_reference(self, ast):
         self.current_paragraph.add_run(ast["name"]).font.bold = True
         self.current_paragraph.add_run(": ")
-        reference = self.referenced[ast["name"]]
-        self.current_paragraph.add_run(reference["title"]).font.italic = True
+        try:
+            reference = self.referenced[ast["name"]]
+            self.current_paragraph.add_run(reference["title"]).font.italic = True
+        except KeyError:
+            self.current_paragraph.add_run(ast["name"]).font.bold = True
 
     def render_internal_link(self, ast):
         run = self.current_paragraph.add_run(ast["section"])

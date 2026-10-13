@@ -1,6 +1,11 @@
 "Abstract compiler and renderer classes."
 
+import os
+
+import click
+
 import constants
+import library
 from text import Text
 import utils
 
@@ -8,40 +13,55 @@ import utils
 class Compiler:
     "Abstract compiler class; to be inherited and elaborated."
 
-    def __init__(self, text, refs_dir, paragraph_numbers=False, silent=False):
+    def __init__(self, text):
         assert isinstance(text, Text)
 
         self.main = text
-        self.refs_dir = refs_dir
 
-        # Output parameters from arguments.
-        if paragraph_numbers:
-            self.paragraph_number = 0
-        else:
-            self.paragraph_number = None
-        self.silent = silent
-
-        # Translator.
-        self.tx = utils.Tx(self.main.language)
-
-        # Output parameters from main text frontmatter.
+        # Get output parameters from main text frontmatter.
         fm = self.main.frontmatter
         self.toc_level = max(0, fm.get("toc-level", 1))
         self.page_break_level = max(0, fm.get("page-break-level", 1))
         self.text_number_level = max(0, fm.get("text-number-level", 1))
         self.underline_indexed = fm.get("underline-indexed", True)
         self.footnotes_location = fm.get("footnotes-location", constants.FOOTNOTES_TEXT)
+        if fm.get("paragraph_numbers", False):
+            self.paragraph_number = 0
+        else:
+            self.paragraph_number = None
+
+        # References library; try specification in main, then environment.
+        try:
+            self.library = library.Library(fm["library"])
+        except KeyError:
+            try:
+                self.library = library.Library(os.environ["LIBRARY"])
+            except KeyError:
+                click.echo("No library specified.")
+                self.library = None
+
+        # Translator.
+        self.tx = utils.Tx(self.main.language)
+
 
     def preprocess(self):
         "Collect references, indexes, footnotes and internal links."
         self.referenced = {}
-        for text in self.main:
-            for element in text.elements():
-                if element["element"] == "reference":
-                    if element["name"] not in self.referenced:
-                        self.referenced[element["name"]] = self.refs_dir[
-                            element["name"]
-                        ]
+        if self.library:
+            missing = set()
+            for text in self.main:
+                for element in text.elements():
+                    if element["element"] != "reference":
+                        continue
+                    name = element["name"]
+                    if name not in self.referenced:
+                        try:
+                            self.referenced[name] = self.library[name]
+                        except KeyError:
+                            missing.add(name)
+            if missing:
+                click.echo(f"Missing references: {', '.join(sorted(missing))}")
+                raise click.Abort()
 
         self.indexed = {}
         for text in self.main:

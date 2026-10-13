@@ -8,12 +8,11 @@ import markdown
 import yaml
 
 import constants
+import utils
 
 
 class Text:
     "Read frontmatter and text from a Markdown (.md) file, possibly with subtexts."
-
-    FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)
 
     def __init__(self, filename, supertext=None, ordinal=1):
         "Read this Markdown file and any subtexts it specifies and convert into AST."
@@ -33,25 +32,13 @@ class Text:
             self.ordinal = ()
         else:
             self.ordinal = supertext.ordinal + (ordinal,)
-        self.read_content()
-        self.read_subtexts()
-
-    def read_content(self):
-        "Read content and front matter. Compile to AST."
-        content = self.filename.read_text()
-        match = self.FRONTMATTER.match(content)
-        if match:
-            self.frontmatter = yaml.safe_load(match.group(1))
-            self.text = content[match.start(2) :]
-        else:
-            self.frontmatter = {}
-            self.text = content
+        self.frontmatter, self.text = utils.parse_md(self.filename)
         self.ast = markdown.to_ast(self.text)
-        # The link definitions are included in-place in the AST.
-        # This item in the AST is redundant; remove it.
+        # The link definitions are included in-place in the AST; This item is redundant.
         self.ast.pop("link_ref_defs", None)
         # Store the footnote definitions for later handling.
         self.footnotes = self.ast.pop("footnotes", {})
+        self.read_subtexts()
 
     def read_subtexts(self):
         "Read the subtexts, if any."
@@ -92,10 +79,6 @@ class Text:
         return result
 
     @property
-    def language(self):
-        return self.main.frontmatter.get("language", constants.SV_SE)
-
-    @property
     def modified(self):
         "The most recently modified of this text and its subtexts (if any)."
         result = dt.datetime.fromtimestamp(self.filename.stat().st_mtime)
@@ -122,6 +105,10 @@ class Text:
     def authors(self):
         "Return the author(s) for this text."
         return self.frontmatter.get("authors", [])
+
+    @property
+    def language(self):
+        return self.frontmatter.get("language", constants.SV_SE)
 
     def elements(self):
         "Return an iterator over the AST elements of this text."

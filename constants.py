@@ -1,9 +1,12 @@
 "Constants."
 
+import re
 import string
 
-VERSION = (0, 4, 3)
+VERSION = (0, 5, 0)
 __version__ = ".".join([str(n) for n in VERSION])
+
+FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)
 
 EM_DASH = "\u2014"
 
@@ -23,7 +26,7 @@ FOOTNOTES_CHAPTER = "chapter"
 FOOTNOTES_TEXT = "text"
 FOOTNOTES_LOCATIONS = [FOOTNOTES_BOOK, FOOTNOTES_CHAPTER, FOOTNOTES_TEXT]
 
-REFS_LINKS = dict(
+EXTERNAL_LINKS = dict(
     doi=("DOI", "https://doi.org/{value}"),
     pmid=("PubMed", "https://pubmed.ncbi.nlm.nih.gov/{value}"),
     isbn=("ISBN", "https://isbnsearch.org/isbn/{value}"),

@@ -20,8 +20,7 @@ import utils
 import click
 
 
-COMPILER_CLASSES = dict(docx=DocxCompiler,
-                        pdf=PdfCompiler)
+COMPILER_CLASSES = dict(docx=DocxCompiler, pdf=PdfCompiler)
 
 
 @click.command()
@@ -38,24 +37,10 @@ COMPILER_CLASSES = dict(docx=DocxCompiler,
     default="ms.docx",
     help="Name of the output file. Its extension ('.docx' or '.pdf') determines the format. Default: 'ms.docx'.",
 )
-@click.option(
-    "--refs_dirname",
-    type=click.Path(exists=True, readable=True, file_okay=False, dir_okay=True),
-    envvar="REFERENCES",
-    help="Path to the directory containing the YAML files for references (articles, books).",
-)
-@click.option(
-    "--paragraph_numbers",
-    "-p",
-    is_flag=True,
-    help="Write consecutive number for each paragraph.",
-)
 @click.option("--readme", "-r", is_flag=True, help="Write out a 'README.md' file.")
 def main(
     input_filename,
     output_filename,
-    refs_dirname,
-    paragraph_numbers,
     readme,
 ):
     start_time = time.perf_counter()
@@ -67,12 +52,6 @@ def main(
         compiler_class = COMPILER_CLASSES[format]
     except KeyError:
         click.get_current_context().fail(f"Error: unknown output format '{format}'.")
-
-    try:
-        refs_dir = utils.ReferencesDir(refs_dirname)
-        click.echo(f"{len(refs_dir)} references in '{refs_dirname}'.")
-    except IOError:
-        click.get_current_context().fail(f"Error: no such reference directory '{refs_dirname}'.")
 
     try:
         main = Text(input_filename)
@@ -88,16 +67,16 @@ def main(
         for filename in unincluded:
             click.echo(f"  {filename}")
 
-    compiler = compiler_class(main, refs_dir, paragraph_numbers=paragraph_numbers)
+    compiler = compiler_class(main)
     compiler.preprocess()
 
     click.echo(f"Footnotes at end of {compiler.footnotes_location}.")
-    click.echo(f"{len(compiler.referenced)} references used from '{refs_dirname}'")
+    click.echo(f"{len(compiler.referenced)} references used from '{compiler.library}'")
     click.echo(f"{len(compiler.indexed)} terms indexed")
 
     compiler.write(output_filename)
 
-    if paragraph_numbers:
+    if compiler.paragraph_number is not None:
         click.echo(f"{compiler.paragraph_number} paragraphs")
     click.echo(f"Wrote '{output_filename}'.")
 

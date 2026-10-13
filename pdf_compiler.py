@@ -289,23 +289,22 @@ class PdfCompiler(Compiler):
             self.para_text(f" <i>{journal}</i>")
         if volume := reference.get("volume"):
             self.para_text(f" <b>{volume}</b>")
-        if issue := reference.get("issue"):
+        if issue := reference.get("number"):
             self.para_text(f" ({issue})")
         if pages := reference.get("pages"):
             self.para_text(" ")
-            self.para_text(pages.replace("--", "-"))
+            self.para_text(pages)
 
     def write_reference_book(self, reference):
         "Write data for reference of type 'book'."
         self.para_text(f"<i>{reference['title']}</i>")
-        if edition := reference.get("edition"):
-            self.para_text(",")
-            if publisher := edition.get("publisher"):
-                self.para_text(" ")
-                self.para_text(publisher)
-            if published := edition.get("published"):
-                self.para_text(" ")
-                self.para_text(published)
+        self.para_text(",")
+        if publisher := reference.get("publisher"):
+            self.para_text(" ")
+            self.para_text(publisher)
+        if published := reference.get("published"):
+            self.para_text(" ")
+            self.para_text(published.split("-")[0])
 
     def write_reference_link(self, reference):
         "Write data for reference of type 'link'."
@@ -323,7 +322,7 @@ class PdfCompiler(Compiler):
             self.para_text(
                 f' <link href="{url}" underline="true" color="royalblue">{url}</link>'
             )
-        for key, (label, template) in constants.REFS_LINKS.items():
+        for key, (label, template) in constants.EXTERNAL_LINKS.items():
             try:
                 value = reference[key]
                 text = f"{label}:{value}"
@@ -651,9 +650,12 @@ class PdfCompiler(Compiler):
         pass
 
     def render_reference(self, ast):
-        self.para_text(f'<link href="#{ast["name"]}"><b>{ast["name"]}</b></link>')
-        reference = self.referenced[ast["name"]]
-        self.para_text(f": <i>{reference['title']}</i>")
+        try:
+            reference = self.referenced[ast["name"]]
+            self.para_text(f'<link href="#{ast["name"]}"><b>{ast["name"]}</b></link>')
+            self.para_text(f": <i>{reference['title']}</i>")
+        except KeyError:
+            self.para_text(f'<bold>{ast["name"]}</bold>')
 
     def render_internal_link(self, ast):
         try:
