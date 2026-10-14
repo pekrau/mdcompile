@@ -14,19 +14,19 @@ import utils
 class Text:
     "Read frontmatter and text from a Markdown (.md) file, possibly with subtexts."
 
-    def __init__(self, filename, supertext=None, ordinal=1):
-        "Read this Markdown file and any subtexts it specifies and convert into AST."
+    def __init__(self, name, supertext=None, ordinal=1):
+        "Read a Markdown file and any subtexts it specifies and convert into AST."
         # Ensure '.md' suffix.
-        filename = pathlib.Path(filename).with_suffix(".md")
-        # Try filename and variants thereof
-        for fn in [filename,
-                   filename.with_stem(filename.stem.replace(" ", "_")),
-                   filename.with_stem(filename.stem.replace("_", " "))]:
-            if fn.exists():
-                self.filename = fn
+        filename = pathlib.Path(name).with_suffix(".md")
+        # Try find the file given filename and variants thereof in some subdirectory.
+        for variant in [filename,
+                        filename.with_stem(filename.stem.replace(" ", "_")),
+                        filename.with_stem(filename.stem.replace("_", " "))]:
+            if found := list(pathlib.Path(".").glob(f"**/{variant}")):
+                self.filename = found[0]
                 break
         else:
-            raise OSError(f"no such file '{filename}'")
+            raise KeyError(f"no such text '{name}'")
         self.supertext = supertext
         if supertext is None:
             self.ordinal = ()
@@ -43,8 +43,8 @@ class Text:
     def read_subtexts(self):
         "Read the subtexts, if any."
         self.subtexts = []
-        for pos, filename in enumerate(self.frontmatter.get("subtexts", [])):
-            self.subtexts.append(Text(filename, supertext=self, ordinal=pos + 1))
+        for pos, name in enumerate(self.frontmatter.get("subtexts", [])):
+            self.subtexts.append(Text(name, supertext=self, ordinal=pos + 1))
 
     def __repr__(self):
         return f'Text("{self.filename}")'

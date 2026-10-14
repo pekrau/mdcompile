@@ -27,13 +27,14 @@ COMPILER_CLASSES = dict(docx=DocxCompiler, pdf=PdfCompiler)
 @click.help_option("--help", "-h")
 @click.argument(
     "input_filename",
-    type=click.Path(exists=True, readable=True, file_okay=True),
+    type=click.Path(exists=True, dir_okay=False, path_type=pathlib.Path),
     default="main.md",
     nargs=1,
 )
 @click.option(
     "--output_filename",
     "-o",
+    type=click.Path(path_type=pathlib.Path),
     default="ms.docx",
     help="Name of the output file. Its extension ('.docx' or '.pdf') determines the format. Default: 'ms.docx'.",
 )
@@ -46,7 +47,6 @@ def main(
     start_time = time.perf_counter()
     click.echo(f"mdc {constants.__version__}")
 
-    output_filename = pathlib.Path(output_filename)
     format = output_filename.suffix.lstrip(".")
     try:
         compiler_class = COMPILER_CLASSES[format]
@@ -55,7 +55,7 @@ def main(
 
     try:
         main = Text(input_filename)
-    except OSError as error:
+    except KeyError as error:
         click.get_current_context().fail(str(error))
     click.echo(f"{len(main)} texts included via '{input_filename}'.")
 
