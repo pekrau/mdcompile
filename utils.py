@@ -32,6 +32,7 @@ def parse_md(filepath):
         text = content
     return (frontmatter, text)
 
+
 def isoformat(datetime=None):
     "ISO format date, no seconds."
     if datetime is None:

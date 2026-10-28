@@ -19,7 +19,6 @@ import utils
 
 import click
 
-
 COMPILER_CLASSES = dict(docx=DocxCompiler, pdf=PdfCompiler)
 
 

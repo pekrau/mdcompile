@@ -100,7 +100,7 @@ class DocxCompiler(Compiler):
         self.doc.core_properties.modified = self.main.modified
         self.doc.core_properties.language = self.main.language
 
-        # Display page number in the DOCX header.
+        # Display page number in the DOCX header on each page.
         # https://stackoverflow.com/questions/56658872/add-page-number-using-python-docx
         paragraph = self.doc.sections[-1].header.paragraphs[0]
         paragraph.alignment = docx.enum.text.WD_ALIGN_PARAGRAPH.RIGHT
@@ -132,9 +132,20 @@ class DocxCompiler(Compiler):
 
         self.text_render(self.main)
 
+        if self.main.footnotes:
+            self.write_heading(self.tx("Footnotes"), 3)
+            self.write_footnotes(self.main)
+
+        if self.referenced and not self.main.subtexts:  # Essay
+            self.write_heading(self.tx("References"), 3)
+            self.write_referenced()
+
         paragraph = self.doc.add_paragraph(style="Normal")
+        paragraph.paragraph_format.space_before = docx.shared.Pt(
+            constants.DOCX_CREATED_SPACER
+        )
         paragraph.add_run(
-            f'{self.tx("Created")}: {utils.isoformat()}\n'
+            f'{self.tx("Created")}: {utils.isoformat()}. '
             f'{self.tx("Latest modification")}: {utils.isoformat(self.main.modified)}'
         ).font.italic = True
 
@@ -183,7 +194,11 @@ class DocxCompiler(Compiler):
             self.write_heading(self.tx("Footnotes"), 1)
             self.write_footnotes(self.main)
 
-        self.write_referenced()
+        if self.referenced and self.main.subtexts:  # Book
+            self.write_page_break()
+            self.write_heading(self.tx("References"), 1)
+            self.write_referenced()
+
         self.write_indexed()
 
         filename = filename or self.main.filename.with_suffix(".docx")
@@ -231,10 +246,6 @@ class DocxCompiler(Compiler):
 
     def write_referenced(self):
         "Write referenced pages, if any."
-        if not self.referenced:
-            return
-        self.write_page_break()
-        self.write_heading(self.tx("References"), 1)
         for name, reference in sorted(self.referenced.items()):
             paragraph = self.doc.add_paragraph()
             paragraph.paragraph_format.left_indent = docx.shared.Pt(
@@ -291,12 +302,14 @@ class DocxCompiler(Compiler):
             paragraph.add_run(" ")
             paragraph.add_run(published.split("-")[0])
 
-    def write_reference_link(self, paragraph, reference):
+    def write_reference_post(self, paragraph, reference):
         "Write reference which is a URL to a website."
         paragraph.add_run(reference["title"]).font.italic = True
-        if url := reference.get("url"):
+        if published := reference.get("published"):
+            paragraph.add_run(f" ({self.tx('published')} {published})")
+        if href := reference.get("href"):
             paragraph.add_run(", ")
-            self.add_hyperlink(paragraph, url, url)
+            self.add_hyperlink(paragraph, href, href)
             if accessed := reference.get("accessed"):
                 paragraph.add_run(f" ({self.tx('accessed')} {accessed})")
 
@@ -325,7 +338,9 @@ class DocxCompiler(Compiler):
             paragraph = self.doc.add_paragraph(canonical, style="Body Text")
             paragraph.paragraph_format.keep_with_next = True
             for text in texts:
-                paragraph = self.doc.add_paragraph(text.ordinal_title,style="Body Text")
+                paragraph = self.doc.add_paragraph(
+                    text.ordinal_title, style="Body Text"
+                )
                 paragraph.paragraph_format.left_indent = docx.shared.Pt(
                     constants.DOCX_INDEXED_INDENT
                 )
@@ -609,7 +624,7 @@ class DocxCompiler(Compiler):
 
     def render_indexed(self, ast):
         run = self.current_paragraph.add_run(ast["term"])
-        if self.underline_indexed:
+        if self.indexed_underlined:
             run.font.underline = True
         if self.bold:
             run.font.bold = True
@@ -626,13 +641,15 @@ class DocxCompiler(Compiler):
         pass
 
     def render_reference(self, ast):
-        self.current_paragraph.add_run(ast["name"]).font.bold = True
-        self.current_paragraph.add_run(": ")
-        try:
+        run = self.current_paragraph.add_run(ast["name"])
+        if self.reference_bold:
+            run.font.bold = True
+        if self.reference_title:
             reference = self.referenced[ast["name"]]
-            self.current_paragraph.add_run(reference["title"]).font.italic = True
-        except KeyError:
-            self.current_paragraph.add_run(ast["name"]).font.bold = True
+            self.current_paragraph.add_run(": ")
+            run = self.current_paragraph.add_run(reference["title"])
+            if self.reference_title_italic:
+                run.font.italic = True
 
     def render_internal_link(self, ast):
         run = self.current_paragraph.add_run(ast["section"])

@@ -20,15 +20,26 @@ class Compiler:
 
         # Get output parameters from main text frontmatter.
         fm = self.main.frontmatter
-        self.toc_level = max(0, fm.get("toc-level", 1))
-        self.page_break_level = max(0, fm.get("page-break-level", 1))
-        self.text_number_level = max(0, fm.get("text-number-level", 1))
-        self.underline_indexed = fm.get("underline-indexed", True)
-        self.footnotes_location = fm.get("footnotes-location", constants.FOOTNOTES_TEXT)
+        self.indexed_underlined = fm.get("indexed-underlined", True)
+        self.reference_bold = fm.get("reference-bold", True)
+        self.reference_title = fm.get("reference-title", False)
+        self.reference_title_italic = fm.get("reference-title-italic", True)
         if fm.get("paragraph_numbers", False):
             self.paragraph_number = 0
         else:
             self.paragraph_number = None
+
+        if self.main.subtexts:  # Book with subtexts.
+            self.toc_level = max(0, fm.get("toc-level", 1))
+            self.page_break_level = max(0, fm.get("page-break-level", 1))
+            self.text_number_level = max(0, fm.get("text-number-level", 1))
+            self.footnotes_location = fm.get(
+                "footnotes-location", constants.FOOTNOTES_TEXT
+            )
+
+        else:  # Essay being one single Markdown source file.
+            self.toc_level = 0
+            self.footnotes_location = constants.FOOTNOTES_TEXT
 
         # References library; try specification in main, then environment.
         try:
@@ -42,7 +53,6 @@ class Compiler:
 
         # Translator.
         self.tx = utils.Tx(self.main.language)
-
 
     def preprocess(self):
         "Collect references, indexes, footnotes and internal links."

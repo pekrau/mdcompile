@@ -28,4 +28,4 @@ class Library:
         filepath = self.dirpath / f"{utils.normalize(name)}.md"
         if not filepath.exists():
             raise KeyError(f"no such reference: '{name}'")
-        return utils.parse_md(filepath)[0] # frontmatter only.
+        return utils.parse_md(filepath)[0]  # frontmatter only.

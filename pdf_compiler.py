@@ -109,12 +109,22 @@ class PdfCompiler(Compiler):
         for author in self.main.authors:
             self.write_heading(", ".join(self.main.authors), 2)
 
-        self.flowables.append(Spacer(0, 28))
+        self.flowables.append(Spacer(0, 10))
         self.text_render(self.main)
 
-        self.flowables.append(Spacer(0, 28))
+        if self.main.footnotes:
+            self.write_heading(self.tx("Footnotes"), 3)
+            self.write_footnotes(self.main)
+
+        if (
+            self.referenced and not self.main.subtexts
+        ):  # Essay; references without page break.
+            self.write_heading(self.tx("References"), 3)
+            self.write_referenced()
+
+        self.flowables.append(Spacer(0, constants.PDF_CREATED_SPACER))
         self.write_preformatted(
-            f'{self.tx("Created")}: {utils.isoformat()}\n'
+            f'{self.tx("Created")}: {utils.isoformat()}. '
             f'{self.tx("Latest modification")}: {utils.isoformat(self.main.modified)}',
             stylename="Italic",
         )
@@ -159,7 +169,13 @@ class PdfCompiler(Compiler):
                 self.write_heading(self.tx("Footnotes"), 1, target="__footnotes__")
                 self.write_footnotes(self.main)
 
-        self.write_referenced()
+        if (
+            self.referenced and self.main.subtexts
+        ):  # Book; page break and target for TOC.
+            self.write_page_break()
+            self.write_heading(self.tx("References"), 1, target="__references__")
+            self.write_referenced()
+
         simple_index = self.write_indexed()
 
         filename or self.main.filename.with_suffix(".pdf")
@@ -251,14 +267,10 @@ class PdfCompiler(Compiler):
 
     def write_referenced(self):
         "Write the referenced pages, if any."
-        if not self.referenced:
-            return
-        self.write_page_break()
-        self.write_heading(self.tx("References"), 1, target="__references__")
+        self.para_push("Reference")
         for name, reference in sorted(self.referenced.items()):
             self.para_push("Reference")
-            self.para_text(f'<a name="{name}"/><b>{name}</b>')
-            self.para_text('<span size="40"> </span>')
+            self.para_text(f'<a name="{name}"/><b>{name}</b>&nbsp;&nbsp;')
             self.write_reference_authors(reference)
             try:
                 method = getattr(self, f"write_reference_{reference['type']}")
@@ -306,12 +318,14 @@ class PdfCompiler(Compiler):
             self.para_text(" ")
             self.para_text(published.split("-")[0])
 
-    def write_reference_link(self, reference):
-        "Write data for reference of type 'link'."
+    def write_reference_post(self, reference):
+        "Write data for reference of type 'post'."
         self.para_text(f" {reference['title']}")
-        if url := reference.get("url"):
+        if published := reference.get("published"):
+            self.para_text(f" ({self.tx('published')} {published})")
+        if href := reference.get("href"):
             self.para_text(
-                f' <link href="{url}" underline="true" color="royalblue">{url}</link>'
+                f' <link href="{href}" underline="true" color="royalblue">{href}</link>'
             )
             if accessed := reference.get("accessed"):
                 self.para_text(f" ({self.tx('accessed')} {accessed})")
@@ -637,7 +651,7 @@ class PdfCompiler(Compiler):
     def render_indexed(self, ast):
         item = ast["canonical"].replace(",", ",,").replace(";", ",")
         self.para_text(f'<index item="{item}"/>')
-        if self.underline_indexed:
+        if self.indexed_underlined:
             self.para_text(f'<u>{ast["term"]}</u>')
         else:
             self.para_text(ast["term"])
@@ -650,12 +664,16 @@ class PdfCompiler(Compiler):
         pass
 
     def render_reference(self, ast):
-        try:
-            reference = self.referenced[ast["name"]]
+        if self.reference_bold:
             self.para_text(f'<link href="#{ast["name"]}"><b>{ast["name"]}</b></link>')
-            self.para_text(f": <i>{reference['title']}</i>")
-        except KeyError:
-            self.para_text(f'<bold>{ast["name"]}</bold>')
+        else:
+            self.para_text(f'<link href="#{ast["name"]}">{ast["name"]}</link>')
+        if self.reference_title:
+            reference = self.referenced[ast["name"]]
+            if self.reference_title_italic:
+                self.para_text(f": <i>{reference['title']}</i>")
+            else:
+                self.para_text(f": {reference['title']}")
 
     def render_internal_link(self, ast):
         try:

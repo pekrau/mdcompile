@@ -19,9 +19,11 @@ class Text:
         # Ensure '.md' suffix.
         filename = pathlib.Path(name).with_suffix(".md")
         # Try find the file given filename and variants thereof in some subdirectory.
-        for variant in [filename,
-                        filename.with_stem(filename.stem.replace(" ", "_")),
-                        filename.with_stem(filename.stem.replace("_", " "))]:
+        for variant in [
+            filename,
+            filename.with_stem(filename.stem.replace(" ", "_")),
+            filename.with_stem(filename.stem.replace("_", " ")),
+        ]:
             if found := list(pathlib.Path(".").glob(f"**/{variant}")):
                 self.filename = found[0]
                 break
