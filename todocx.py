@@ -1,6 +1,8 @@
 "Compile Markdown file(s) with footnotes, indexed terms and references to DOCX."
 
 import datetime as dt
+import os
+import pathlib
 
 import docx
 import docx.oxml
@@ -8,9 +10,16 @@ import docx.shared
 import docx.styles.style
 from docx.enum.style import WD_STYLE_TYPE
 
+import click
+import icecream
+
+# For debugging.
+icecream.install()
+
 import constants
 from compiler import Compiler
-from text import Text
+from library import Library
+from text import read_texts
 import utils
 
 
@@ -18,7 +27,7 @@ class DocxCompiler(Compiler):
     "Compile to DOCX format."
 
     def write(self, filename=None):
-        "Convert the main text and its subtexts, if any, into DOCX."
+        "Convert the text and its subtexts, if any, into DOCX."
         # Create and set up the DOCX document
         self.doc = docx.Document()
 
@@ -27,7 +36,7 @@ class DocxCompiler(Compiler):
         styles_element = self.doc.styles.element
         rpr_default = styles_element.xpath("./w:docDefaults/w:rPrDefault/w:rPr")[0]
         lang_default = rpr_default.xpath("w:lang")[0]
-        lang_default.set(docx.oxml.shared.qn("w:val"), self.main.language)
+        lang_default.set(docx.oxml.shared.qn("w:val"), self.text.language)
 
         # Set to A4 page size. XXX Allow alternatives.
         section = self.doc.sections[0]
@@ -95,10 +104,10 @@ class DocxCompiler(Compiler):
         style.paragraph_format.left_indent = docx.shared.Pt(constants.DOCX_CODE_INDENT)
 
         # Set Dublin core metadata.
-        self.doc.core_properties.author = ", ".join(self.main.authors)
+        self.doc.core_properties.author = ", ".join(self.text.authors)
         self.doc.core_properties.created = dt.datetime.now()
-        self.doc.core_properties.modified = self.main.modified
-        self.doc.core_properties.language = self.main.language
+        self.doc.core_properties.modified = self.text.modified
+        self.doc.core_properties.language = self.text.language
 
         # Display page number in the DOCX header on each page.
         # https://stackoverflow.com/questions/56658872/add-page-number-using-python-docx
@@ -118,25 +127,25 @@ class DocxCompiler(Compiler):
 
         # Write title page: title, subtitle, initial note, authors, dates.
         paragraph = self.doc.add_paragraph(style="Title 0")
-        paragraph.add_run(self.main.title)
-        if self.main.subtitle:
+        paragraph.add_run(self.text.title)
+        if self.text.subtitle:
             paragraph = self.doc.add_paragraph(style="Title 1")
-            paragraph.add_run(self.main.subtitle)
+            paragraph.add_run(self.text.subtitle)
 
         # Split authors into runs to allow line break between them.
         paragraph = self.doc.add_paragraph(style="Title 2")
-        for author in self.main.authors:
+        for author in self.text.authors:
             paragraph.add_run(author)
-            if author != self.main.authors[-1]:
+            if author != self.text.authors[-1]:
                 paragraph.add_run(", ")
 
-        self.text_render(self.main)
+        self.text_render(self.text)
 
-        if self.main.footnotes:
+        if self.text.footnotes:
             self.write_heading(self.tx("Footnotes"), 3)
-            self.write_footnotes(self.main)
+            self.write_footnotes(self.text)
 
-        if self.referenced and not self.main.subtexts:  # Essay
+        if self.referenced and not self.text.subtexts:  # Essay
             self.write_heading(self.tx("References"), 3)
             self.write_referenced()
 
@@ -146,15 +155,15 @@ class DocxCompiler(Compiler):
         )
         paragraph.add_run(
             f'{self.tx("Created")}: {utils.isoformat()}. '
-            f'{self.tx("Latest modification")}: {utils.isoformat(self.main.modified)}'
+            f'{self.tx("Latest modification")}: {utils.isoformat(self.text.modified)}'
         ).font.italic = True
 
         # Write table of contents (TOC) page(s).
         # The DOCX format does not allow determining the page numbers before printing.
-        if self.toc_level and self.main.subtexts:
+        if self.toc_level and self.text.subtexts:
             self.write_page_break()
             self.write_heading(self.tx("Contents"), 1)
-            for text in list(self.main)[1:]:  # Skip the main file (title page).
+            for text in list(self.text)[1:]:  # Skip the root file (title page).
                 if text.level <= self.toc_level:
                     paragraph = self.doc.add_paragraph(style="Body Text")
                     paragraph.paragraph_format.left_indent = docx.shared.Pt(
@@ -172,7 +181,7 @@ class DocxCompiler(Compiler):
             # Write entries for book footnotes, references and indexed, if any such.
             if (
                 self.footnotes_location == constants.FOOTNOTES_BOOK
-                and self.main.footnotes
+                and self.text.footnotes
             ):
                 self.doc.add_paragraph(self.tx("Footnotes"), style="Body Text")
             if self.referenced:
@@ -181,7 +190,7 @@ class DocxCompiler(Compiler):
                 self.doc.add_paragraph(self.tx("Index"), style="Body Text")
 
         # First-level subtexts are chapters.
-        for text in self.main.subtexts:
+        for text in self.text.subtexts:
             self.write_text(text)
             if self.footnotes_location == constants.FOOTNOTES_CHAPTER:
                 if text.footnotes:
@@ -192,16 +201,16 @@ class DocxCompiler(Compiler):
         if self.footnotes_location == constants.FOOTNOTES_BOOK:
             self.write_page_break()
             self.write_heading(self.tx("Footnotes"), 1)
-            self.write_footnotes(self.main)
+            self.write_footnotes(self.text)
 
-        if self.referenced and self.main.subtexts:  # Book
+        if self.referenced and self.text.subtexts:  # Book
             self.write_page_break()
             self.write_heading(self.tx("References"), 1)
             self.write_referenced()
 
         self.write_indexed()
 
-        filename = filename or self.main.filename.with_suffix(".docx")
+        filename = filename or self.text.filename.with_suffix(".docx")
         self.doc.save(filename)
 
     def write_text(self, text):
@@ -515,26 +524,24 @@ class DocxCompiler(Compiler):
                     # SVG image.
                     if img["content_type"] == constants.SVG_MIMETYPE:
                         # SVG in image library has already been checked for validity.
-                        root = minixml.parse_content(img["data"])
+                        svg = minixml.parse_content(img["data"])
 
                     # Vega-Lite plot.
                     else:
                         # JSON in image library has already been checked for validity.
                         vl_spec = json.loads(img["data"])
-                        root = minixml.parse_content(
-                            vl_convert.vegalite_to_svg(vl_spec)
-                        )
+                        svg = minixml.parse_content(vl_convert.vegalite_to_svg(vl_spec))
 
                     # Set viewbox so that scaling behaves.
-                    root["viewBox"] = f"0 0 {root['width']} {root['height']}"
+                    svg["viewBox"] = f"0 0 {svg['width']} {svg['height']}"
 
                     # Scale width and height in SVG element.
                     rendering_factor = img["docx"]["png_rendering_factor"]
-                    root["width"] = rendering_factor * float(root["width"])
-                    root["height"] = rendering_factor * float(root["height"])
+                    svg["width"] = rendering_factor * float(svg["width"])
+                    svg["height"] = rendering_factor * float(svg["height"])
 
                     self.add_image(
-                        vl_convert.svg_to_png(repr(root)),
+                        vl_convert.svg_to_png(repr(svg)),
                         ast,
                         scale_factor / rendering_factor,
                     )
@@ -654,3 +661,52 @@ class DocxCompiler(Compiler):
     def render_internal_link(self, ast):
         run = self.current_paragraph.add_run(ast["section"])
         run.font.color.rgb = docx.shared.RGBColor(225, 0, 0)
+
+
+@click.command()
+@click.help_option("--help", "-h")
+@click.argument(
+    "directory",
+    type=click.Path(exists=True, resolve_path=True, path_type=pathlib.Path),
+    default=pathlib.Path.cwd(),
+    nargs=1,
+)
+@click.option("--readme", "-r", is_flag=True, help="Write out a 'README.md' file.")
+def main(directory, readme):
+    "Compile Markdown file(s) with footnotes, indexed terms and references to DOCX."
+    timer = utils.Timer()
+    click.echo(f"todocx, mdcompile {constants.__version__}")
+
+    try:
+        text = read_texts(directory)
+    except FileNotFoundError as error:
+        raise click.UsageError(str(error))
+    click.echo(f"{len(text)} Markdown files read.")
+
+    try:
+        compiler = DocxCompiler(text)
+        compiler.preprocess()
+    except (ValueError, IOError) as error:
+        raise click.UsageError(str(error))
+    click.echo(f"Footnotes at end of {compiler.footnotes_location}.")
+    click.echo(
+        f"{len(compiler.referenced)} references from library '{compiler.library}'."
+    )
+    click.echo(f"{len(compiler.indexed)} terms indexed.")
+
+    outputfilepath = directory / "manuscript.docx"
+    compiler.write(outputfilepath)
+    if compiler.paragraph_number is not None:
+        click.echo(f"{compiler.paragraph_number} paragraphs.")
+    click.echo(f"Wrote '{outputfilepath}'.")
+
+    if readme:
+        outputfilepath = directory / constants.README_FILENAME
+        utils.write_readme(text, outputfilepath)
+        click.echo(f"Wrote '{outputfilepath}'.")
+
+    click.echo(timer)
+
+
+if __name__ == "__main__":
+    main()

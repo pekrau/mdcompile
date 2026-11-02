@@ -2,9 +2,8 @@
 
 import datetime as dt
 import pathlib
+import time
 import unicodedata
-
-import yaml
 
 import constants
 
@@ -18,21 +17,6 @@ def normalize(s):
     return result.casefold()
 
 
-def parse_md(filepath):
-    "Read the Markdown file, parse, and return the frontmatter and text."
-    assert filepath.exists(), filepath
-    assert filepath.suffix == ".md", filepath
-    content = filepath.read_text()
-    match = constants.FRONTMATTER.match(content)
-    if match:
-        frontmatter = yaml.safe_load(match.group(1))
-        text = content[match.start(2) :]
-    else:
-        frontmatter = {}
-        text = content
-    return (frontmatter, text)
-
-
 def isoformat(datetime=None):
     "ISO format date, no seconds."
     if datetime is None:
@@ -40,14 +24,11 @@ def isoformat(datetime=None):
     return datetime.strftime(constants.DATETIME_ISOFORMAT)
 
 
-class Tx:
-    "Translate fixed words in the code."
+class Timer:
+    "CPU timer."
 
-    def __init__(self, language):
-        self.language = language
+    def __init__(self):
+        self.start = time.perf_counter()
 
-    def __call__(self, word):
-        try:
-            return constants.LEXICON[self.language][word]
-        except KeyError:
-            return word
+    def __str__(self):
+        return f"CPU time: {time.perf_counter() - self.start:.3f} seconds."

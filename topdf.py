@@ -1,6 +1,7 @@
 "Compile Markdown file(s) with footnotes, indexed terms and references to PDF."
 
 import io
+import pathlib
 
 import reportlab
 import reportlab.rl_config
@@ -11,9 +12,16 @@ from reportlab.platypus.doctemplate import LayoutError
 from reportlab.platypus.tables import *
 from reportlab.platypus.tableofcontents import TableOfContents, SimpleIndex
 
+import click
+import icecream
+
+# For debugging.
+icecream.install()
+
 import constants
 from compiler import Compiler
-from text import Text
+from library import Library
+from text import read_texts
 import utils
 
 
@@ -22,6 +30,7 @@ class PdfCompiler(Compiler):
 
     def write(self, filename=None):
         self.stylesheet = getSampleStyleSheet()
+        # See which are predefined.
         # self.stylesheet.list()
 
         # These modifications will affect subsquent styles inheriting from Normal.
@@ -99,25 +108,25 @@ class PdfCompiler(Compiler):
         self.flowables = []
 
         # Write title page: title, subtitle, initial note, authors, dates.
-        self.write_paragraph(self.main.title, "Title")
+        self.write_paragraph(self.text.title, "Title")
         self.flowables.append(
             HRFlowable(width="100%", color=reportlab.lib.colors.black, spaceAfter=20)
         )
-        if self.main.subtitle:
-            self.write_heading(self.main.subtitle, 1)
+        if self.text.subtitle:
+            self.write_heading(self.text.subtitle, 1)
 
-        for author in self.main.authors:
-            self.write_heading(", ".join(self.main.authors), 2)
+        for author in self.text.authors:
+            self.write_heading(", ".join(self.text.authors), 2)
 
         self.flowables.append(Spacer(0, 10))
-        self.text_render(self.main)
+        self.text_render(self.text)
 
-        if self.main.footnotes:
+        if self.text.footnotes:
             self.write_heading(self.tx("Footnotes"), 3)
-            self.write_footnotes(self.main)
+            self.write_footnotes(self.text)
 
         if (
-            self.referenced and not self.main.subtexts
+            self.referenced and not self.text.subtexts
         ):  # Essay; references without page break.
             self.write_heading(self.tx("References"), 3)
             self.write_referenced()
@@ -125,12 +134,12 @@ class PdfCompiler(Compiler):
         self.flowables.append(Spacer(0, constants.PDF_CREATED_SPACER))
         self.write_preformatted(
             f'{self.tx("Created")}: {utils.isoformat()}. '
-            f'{self.tx("Latest modification")}: {utils.isoformat(self.main.modified)}',
+            f'{self.tx("Latest modification")}: {utils.isoformat(self.text.modified)}',
             stylename="Italic",
         )
 
         # Write table of contents (TOC) page(s).
-        if self.toc_level and self.main.subtexts:
+        if self.toc_level and self.text.subtexts:
             self.write_page_break()
             self.write_heading(self.tx("Contents"), 1)
             # Define the TOC level styles.
@@ -155,7 +164,7 @@ class PdfCompiler(Compiler):
             self.toc = None
 
         # First-level subtexts are chapters.
-        for text in self.main.subtexts:
+        for text in self.text.subtexts:
             self.write_text(text)
             if self.footnotes_location == constants.FOOTNOTES_CHAPTER:
                 if text.footnotes:
@@ -164,13 +173,13 @@ class PdfCompiler(Compiler):
                     self.write_footnotes(text)
 
         if self.footnotes_location == constants.FOOTNOTES_BOOK:
-            if self.main.footnotes:
+            if self.text.footnotes:
                 self.write_page_break()
                 self.write_heading(self.tx("Footnotes"), 1, target="__footnotes__")
-                self.write_footnotes(self.main)
+                self.write_footnotes(self.text)
 
         if (
-            self.referenced and self.main.subtexts
+            self.referenced and self.text.subtexts
         ):  # Book; page break and target for TOC.
             self.write_page_break()
             self.write_heading(self.tx("References"), 1, target="__references__")
@@ -178,16 +187,16 @@ class PdfCompiler(Compiler):
 
         simple_index = self.write_indexed()
 
-        filename or self.main.filename.with_suffix(".pdf")
+        filename or self.text.filename.with_suffix(".pdf")
         with open(filename, "wb") as outfile:
             if self.toc is not None:
                 document = TocDocTemplate(
                     outfile,
                     toc_level=self.toc_level,
-                    title=self.main.title,
-                    author=", ".join(self.main.authors) or None,
+                    title=self.text.title,
+                    author=", ".join(self.text.authors) or None,
                     creator=f"mdcompile {constants.__version__}",
-                    lang=self.main.language,
+                    lang=self.text.language,
                 )
 
                 if self.indexed:
@@ -203,10 +212,10 @@ class PdfCompiler(Compiler):
             else:
                 document = SimpleDocTemplate(
                     outfile,
-                    title=self.main.title,
-                    author=", ".join(self.main.authors) or None,
+                    title=self.text.title,
+                    author=", ".join(self.text.authors) or None,
                     creator=f"mdcompile {constants.__version__}",
-                    lang=self.main.language,
+                    lang=self.text.language,
                 )
                 if self.indexed:
                     document.build(
@@ -709,3 +718,52 @@ class TocMarker(NullDraw):
         self.toc_level = toc_level
         self.toc_text = toc_text
         self.toc_anchor = toc_anchor
+
+
+@click.command()
+@click.help_option("--help", "-h")
+@click.argument(
+    "directory",
+    type=click.Path(exists=True, resolve_path=True, path_type=pathlib.Path),
+    default=pathlib.Path.cwd(),
+    nargs=1,
+)
+@click.option("--readme", "-r", is_flag=True, help="Write out a 'README.md' file.")
+def main(directory, readme):
+    "Compile Markdown file(s) with footnotes, indexed terms and references to PDF."
+    timer = utils.Timer()
+    click.echo(f"topdf, mdcompile {constants.__version__}")
+
+    try:
+        text = read_texts(directory)
+    except FileNotFoundError as error:
+        raise click.UsageError(str(error))
+    click.echo(f"{len(text)} Markdown files read.")
+
+    try:
+        compiler = PdfCompiler(text)
+        compiler.preprocess()
+    except (ValueError, IOError) as error:
+        raise click.UsageError(str(error))
+    click.echo(f"Footnotes at end of {compiler.footnotes_location}.")
+    click.echo(
+        f"{len(compiler.referenced)} references from library '{compiler.library}'."
+    )
+    click.echo(f"{len(compiler.indexed)} terms indexed.")
+
+    outputfilepath = directory / "manuscript.pdf"
+    compiler.write(outputfilepath)
+    if compiler.paragraph_number is not None:
+        click.echo(f"{compiler.paragraph_number} paragraphs.")
+    click.echo(f"Wrote '{outputfilepath}'.")
+
+    if readme:
+        outputfilepath = directory / constants.README_FILENAME
+        utils.write_readme(text, outputfilepath)
+        click.echo(f"Wrote '{outputfilepath}'.")
+
+    click.echo(timer)
+
+
+if __name__ == "__main__":
+    main()

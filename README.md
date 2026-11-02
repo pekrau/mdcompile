@@ -4,15 +4,30 @@ mdcompile
 Compile Markdown file(s) with extensions for hierachy, footnotes, indexed terms
 and references to DOCX or PDF.
 
+## DOCX
+
 ```
-Usage: mdcompile.py [OPTIONS] [INPUT_FILENAME]
+Usage: todocx.py [OPTIONS] [DIRECTORY]
+
+  Compile Markdown file(s) with footnotes, indexed terms and references to
+  DOCX.
 
 Options:
-  -h, --help                  Show this message and exit.
-  -o, --output_filename TEXT  Name of the output file. Its extension ('.docx'
-                              or '.pdf') determines the format. Default:
-                              'ms.docx'.
-  -r, --readme                Write out a 'README.md' file.
+  -h, --help    Show this message and exit.
+  -r, --readme  Write out a 'README.md' file.
+```
+
+## PDF
+
+```
+Usage: topdf.py [OPTIONS] [DIRECTORY]
+
+  Compile Markdown file(s) with footnotes, indexed terms and references to
+  PDF.
+
+Options:
+  -h, --help    Show this message and exit.
+  -r, --readme  Write out a 'README.md' file.
 ```
 
 ## Dependencies

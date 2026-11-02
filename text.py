@@ -11,48 +11,80 @@ import constants
 import utils
 
 
-class Text:
-    "Read frontmatter and text from a Markdown (.md) file, possibly with subtexts."
+def read_texts(directory, supertext=None, ordinal=None):
+    """Read the Markdown file(s) in the given directory,
+    and recursively in any subdirectories.
+    """
+    root = Text(
+        directory / constants.TEXT_FILENAME, supertext=supertext, ordinal=ordinal
+    )
+    ordinal = 0
+    for path in sorted(directory.iterdir()):
+        if path.name == constants.TEXT_FILENAME:
+            continue
+        if path.name == constants.README_FILENAME:
+            continue
+        if path.name.startswith("."):
+            continue
+        if path.is_dir():
+            ordinal += 1
+            read_texts(path, supertext=root, ordinal=ordinal)
+        elif path.suffix == ".md":
+            ordinal += 1
+            Text(path, supertext=root, ordinal=ordinal)
+    return root
 
-    def __init__(self, name, supertext=None, ordinal=1):
-        "Read a Markdown file and any subtexts it specifies and convert into AST."
-        # Ensure '.md' suffix.
-        filename = pathlib.Path(name).with_suffix(".md")
-        # Try find the file given filename and variants thereof in some subdirectory.
-        for variant in [
-            filename,
-            filename.with_stem(filename.stem.replace(" ", "_")),
-            filename.with_stem(filename.stem.replace("_", " ")),
-        ]:
-            if found := list(pathlib.Path(".").glob(f"**/{variant}")):
-                self.filename = found[0]
-                break
-        else:
-            raise KeyError(f"no such text '{name}'")
-        self.supertext = supertext
+
+def parse_md(filepath):
+    "Read the Markdown file, parse the YAML frontmatter, and return it and the text."
+    assert filepath.exists(), filepath
+    assert filepath.suffix == ".md", filepath
+    content = filepath.read_text()
+    match = constants.FRONTMATTER.match(content)
+    if match:
+        frontmatter = yaml.safe_load(match.group(1))
+        text = content[match.start(2) :]
+    else:
+        frontmatter = {}
+        text = content
+    return (frontmatter, text)
+
+
+class Text:
+    "Read frontmatter and text from a Markdown (.md) file."
+
+    def __init__(self, filepath, supertext=None, ordinal=None):
+        """Read the Markdown file, if it exists.
+        Parse the YAML into frontmatter.
+        Convert the Markdown text into AST.
+        Include into the supertext, if any.
+        """
+        self.filepath = filepath
         if supertext is None:
             self.ordinal = ()
         else:
             self.ordinal = supertext.ordinal + (ordinal,)
-        self.frontmatter, self.text = utils.parse_md(self.filename)
+            supertext.subtexts.append(self)
+        self.supertext = supertext
+        if self.filepath.exists():
+            self.frontmatter, self.text = parse_md(self.filepath)
+        elif self.supertext is None:
+            raise FileNotFoundError(f"no such file '{filepath}'")
+        else:
+            self.frontmatter = {}
+            self.text = ""
         self.ast = markdown.to_ast(self.text)
-        # The link definitions are included in-place in the AST; This item is redundant.
+        # Discard redundant item; link defs are included in-place in the AST.
         self.ast.pop("link_ref_defs", None)
         # Store the footnote definitions for later handling.
         self.footnotes = self.ast.pop("footnotes", {})
-        self.read_subtexts()
-
-    def read_subtexts(self):
-        "Read the subtexts, if any."
         self.subtexts = []
-        for pos, name in enumerate(self.frontmatter.get("subtexts", [])):
-            self.subtexts.append(Text(name, supertext=self, ordinal=pos + 1))
 
     def __repr__(self):
-        return f'Text("{self.filename}")'
+        return f'Text("{self.filepath}")'
 
     def __len__(self):
-        "Number of texts."
+        "Number of texts, including this one and its subtexts."
         # XXX Why does 'list(self)' give infinite recursion?
         return len([t for t in self])
 
@@ -63,8 +95,8 @@ class Text:
             yield from iter(subtext)
 
     @property
-    def main(self):
-        "Return the main (root) text in the hierarchy."
+    def root(self):
+        "Return the root text."
         text = self
         while text.supertext is not None:
             text = text.supertext
@@ -83,7 +115,10 @@ class Text:
     @property
     def modified(self):
         "The most recently modified of this text and its subtexts (if any)."
-        result = dt.datetime.fromtimestamp(self.filename.stat().st_mtime)
+        if self.filepath.exists():
+            result = dt.datetime.fromtimestamp(self.filepath.stat().st_mtime)
+        else:
+            result = dt.datetime.fromtimestamp(self.filepath.parent.stat().st_mtime)
         for subtext in self.subtexts:
             result = max(result, subtext.modified)
         return result
@@ -91,7 +126,19 @@ class Text:
     @property
     def title(self):
         "The title for this text."
-        return self.frontmatter.get("title") or self.filename.stem.replace("_", " ")
+        try:
+            return self.frontmatter["title"]
+        except KeyError:
+            if self.filepath.name == constants.TEXT_FILENAME:
+                title = self.filepath.parent.stem
+            else:
+                title = self.filepath.stem
+            title = title.replace("_", " ")
+            parts = title.split()
+            if parts[0].isdigit():
+                return " ".join(parts[1:])
+            else:
+                return title
 
     @property
     def ordinal_title(self):
@@ -115,6 +162,17 @@ class Text:
     def elements(self):
         "Return an iterator over the AST elements of this text."
         return AstIterator(self.ast)
+
+    def write_readme(self, filepath):
+        "Write a README file with a directory of the Markdown files."
+        with open(filepath, "w") as outfile:
+            outfile.write(self.title + "\n")
+            outfile.write("=" * len(self.title) + "\n\n")
+            for subtext in self:
+                if subtext is self:
+                    continue
+                outfile.write(" " * 5 * (len(subtext.ordinal) - 1))
+                outfile.write(f"{subtext.ordinal[-1]}. {subtext.title}\n")
 
 
 class AstIterator:

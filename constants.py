@@ -3,7 +3,7 @@
 import re
 import string
 
-VERSION = (0, 5, 2)
+VERSION = (0, 6, 0)
 __version__ = ".".join([str(n) for n in VERSION])
 
 FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)
@@ -13,6 +13,9 @@ EM_DASH = "\u2014"
 SAFE_CHARACTERS = set(string.ascii_letters + string.digits)
 
 DATETIME_ISOFORMAT = "%Y-%m-%d %H:%M"
+
+TEXT_FILENAME = "text.md"
+README_FILENAME = "README.md"
 
 MAX_LEVEL = 6
 
