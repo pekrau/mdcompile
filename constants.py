@@ -3,7 +3,7 @@
 import re
 import string
 
-VERSION = (0, 6, 0)
+VERSION = (0, 7, 0)
 __version__ = ".".join([str(n) for n in VERSION])
 
 FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)
@@ -16,6 +16,7 @@ DATETIME_ISOFORMAT = "%Y-%m-%d %H:%M"
 
 TEXT_FILENAME = "text.md"
 README_FILENAME = "README.md"
+OUTPUT_FILENAME = "manuscript"
 
 MAX_LEVEL = 6
 

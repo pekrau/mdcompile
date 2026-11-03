@@ -5,7 +5,7 @@ First try explicit location, then use envvar LIBRARY_DIR as fallback.
 import os
 import pathlib
 
-from text import parse_md
+from text import split_file
 import utils
 
 
@@ -36,4 +36,4 @@ class Library:
         filepath = self.dirpath / f"{utils.normalize(name)}.md"
         if not filepath.exists():
             raise KeyError(f"no such reference: '{name}'")
-        return parse_md(filepath)[0]  # frontmatter only.
+        return split_file(filepath)[0]  # frontmatter only.

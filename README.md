@@ -1,33 +1,26 @@
 mdcompile
 =========
 
-Compile Markdown file(s) with extensions for hierachy, footnotes, indexed terms
-and references to DOCX or PDF.
+Compile Markdown file(s) to DOCX or PDF. With extensions for hierachy,
+footnotes, indexed terms and references.
 
-## DOCX
+Usage: mdc.py [OPTIONS]
 
-```
-Usage: todocx.py [OPTIONS] [DIRECTORY]
-
-  Compile Markdown file(s) with footnotes, indexed terms and references to
-  DOCX.
+  Command-line script to compile Markdown file(s).
 
 Options:
-  -h, --help    Show this message and exit.
-  -r, --readme  Write out a 'README.md' file.
+  -h, --help                      Show this message and exit.
+  -i, --input_filepath PATH       Input Markdown file to compile. All sibling
+                                  directories and files are traversed and
+                                  compiled together. Default './text.md'.
+  -o, --output_filename PATH      Output file. The extension depends on the
+                                  output format. Default 'manuscript'.
+  -r, --readme                    Write out a 'README.md' file.
+  Output formats: [mutually_exclusive]
+                                  Formats to compile Markdown into.
+    -d, --docx                    DOCX format (default).
+    -p, --pdf                     PDF format.
 ```
-
-## PDF
-
-```
-Usage: topdf.py [OPTIONS] [DIRECTORY]
-
-  Compile Markdown file(s) with footnotes, indexed terms and references to
-  PDF.
-
-Options:
-  -h, --help    Show this message and exit.
-  -r, --readme  Write out a 'README.md' file.
 ```
 
 ## Dependencies

@@ -39,7 +39,7 @@ class Compiler:
         else:
             self.paragraph_number = None
 
-        # Book with subtexts.
+        # Book; has subtexts.
         if self.text.subtexts:
             self.toc_level = max(0, fm.get("toc-level", 1))
             self.page_break_level = max(0, fm.get("page-break-level", 1))
@@ -48,7 +48,7 @@ class Compiler:
                 "footnotes-location", constants.FOOTNOTES_TEXT
             )
 
-        # Essay being one single Markdown source file.
+        # Essay; one single Markdown source file.
         else:
             self.toc_level = 0
             self.footnotes_location = constants.FOOTNOTES_TEXT
@@ -59,8 +59,7 @@ class Compiler:
         # References library
         self.library = library.Library(self.text.frontmatter.get("library"))
 
-    def preprocess(self):
-        "Collect references, indexes, footnotes and internal links."
+        # Collect references in the text(s). Error if any missing.
         self.referenced = {}
         missing = set()
         for text in self.text:
@@ -76,6 +75,7 @@ class Compiler:
         if missing:
             raise ValueError(f"Missing references: {', '.join(sorted(missing))}")
 
+        # Collect indexed terms.
         self.indexed = {}
         for text in self.text:
             for element in text.elements():
@@ -127,6 +127,7 @@ class Compiler:
                         self.text.footnotes.update(text.footnotes)
                         text.footnotes.clear()
 
+        # Check that section titles are unique in the book.
         self.section_titles = {}
         for text in self.text:
             if text is self.text:
@@ -136,6 +137,7 @@ class Compiler:
                 raise ValueError(f"multiple uses of title '{text.title}'")
             self.section_titles[key] = text.ordinal_title
 
+        # Setup internal links.
         for text in self.text:
             for element in text.elements():
                 if element["element"] == "internal_link":

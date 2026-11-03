@@ -1,26 +1,21 @@
 "Read frontmatter and text from a Markdown (.md) file, possibly with subtexts."
 
 import datetime as dt
-import pathlib
-import re
 
 import markdown
 import yaml
 
 import constants
-import utils
 
 
-def read_texts(directory, supertext=None, ordinal=None):
+def read_texts(directory, text_filename, supertext=None, ordinal=None):
     """Read the Markdown file(s) in the given directory,
     and recursively in any subdirectories.
     """
-    root = Text(
-        directory / constants.TEXT_FILENAME, supertext=supertext, ordinal=ordinal
-    )
+    root = Text(directory / text_filename, supertext=supertext, ordinal=ordinal)
     ordinal = 0
     for path in sorted(directory.iterdir()):
-        if path.name == constants.TEXT_FILENAME:
+        if path.name == text_filename:
             continue
         if path.name == constants.README_FILENAME:
             continue
@@ -28,14 +23,14 @@ def read_texts(directory, supertext=None, ordinal=None):
             continue
         if path.is_dir():
             ordinal += 1
-            read_texts(path, supertext=root, ordinal=ordinal)
+            read_texts(path, text_filename, supertext=root, ordinal=ordinal)
         elif path.suffix == ".md":
             ordinal += 1
             Text(path, supertext=root, ordinal=ordinal)
     return root
 
 
-def parse_md(filepath):
+def split_file(filepath):
     "Read the Markdown file, parse the YAML frontmatter, and return it and the text."
     assert filepath.exists(), filepath
     assert filepath.suffix == ".md", filepath
@@ -67,7 +62,7 @@ class Text:
             supertext.subtexts.append(self)
         self.supertext = supertext
         if self.filepath.exists():
-            self.frontmatter, self.text = parse_md(self.filepath)
+            self.frontmatter, self.text = split_file(self.filepath)
         elif self.supertext is None:
             raise FileNotFoundError(f"no such file '{filepath}'")
         else:
@@ -162,17 +157,6 @@ class Text:
     def elements(self):
         "Return an iterator over the AST elements of this text."
         return AstIterator(self.ast)
-
-    def write_readme(self, filepath):
-        "Write a README file with a directory of the Markdown files."
-        with open(filepath, "w") as outfile:
-            outfile.write(self.title + "\n")
-            outfile.write("=" * len(self.title) + "\n\n")
-            for subtext in self:
-                if subtext is self:
-                    continue
-                outfile.write(" " * 5 * (len(subtext.ordinal) - 1))
-                outfile.write(f"{subtext.ordinal[-1]}. {subtext.title}\n")
 
 
 class AstIterator:

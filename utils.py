@@ -1,8 +1,6 @@
 "Various utility functions."
 
 import datetime as dt
-import pathlib
-import time
 import unicodedata
 
 import constants
@@ -22,13 +20,3 @@ def isoformat(datetime=None):
     if datetime is None:
         datetime = dt.datetime.now()
     return datetime.strftime(constants.DATETIME_ISOFORMAT)
-
-
-class Timer:
-    "CPU timer."
-
-    def __init__(self):
-        self.start = time.perf_counter()
-
-    def __str__(self):
-        return f"CPU time: {time.perf_counter() - self.start:.3f} seconds."

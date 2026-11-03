@@ -1,7 +1,6 @@
 "Compile Markdown file(s) with footnotes, indexed terms and references to PDF."
 
 import io
-import pathlib
 
 import reportlab
 import reportlab.rl_config
@@ -12,16 +11,8 @@ from reportlab.platypus.doctemplate import LayoutError
 from reportlab.platypus.tables import *
 from reportlab.platypus.tableofcontents import TableOfContents, SimpleIndex
 
-import click
-import icecream
-
-# For debugging.
-icecream.install()
-
 import constants
 from compiler import Compiler
-from library import Library
-from text import read_texts
 import utils
 
 
@@ -718,52 +709,3 @@ class TocMarker(NullDraw):
         self.toc_level = toc_level
         self.toc_text = toc_text
         self.toc_anchor = toc_anchor
-
-
-@click.command()
-@click.help_option("--help", "-h")
-@click.argument(
-    "directory",
-    type=click.Path(exists=True, resolve_path=True, path_type=pathlib.Path),
-    default=pathlib.Path.cwd(),
-    nargs=1,
-)
-@click.option("--readme", "-r", is_flag=True, help="Write out a 'README.md' file.")
-def main(directory, readme):
-    "Compile Markdown file(s) with footnotes, indexed terms and references to PDF."
-    timer = utils.Timer()
-    click.echo(f"topdf, mdcompile {constants.__version__}")
-
-    try:
-        text = read_texts(directory)
-    except FileNotFoundError as error:
-        raise click.UsageError(str(error))
-    click.echo(f"{len(text)} Markdown files read.")
-
-    try:
-        compiler = PdfCompiler(text)
-        compiler.preprocess()
-    except (ValueError, IOError) as error:
-        raise click.UsageError(str(error))
-    click.echo(f"Footnotes at end of {compiler.footnotes_location}.")
-    click.echo(
-        f"{len(compiler.referenced)} references from library '{compiler.library}'."
-    )
-    click.echo(f"{len(compiler.indexed)} terms indexed.")
-
-    outputfilepath = directory / "manuscript.pdf"
-    compiler.write(outputfilepath)
-    if compiler.paragraph_number is not None:
-        click.echo(f"{compiler.paragraph_number} paragraphs.")
-    click.echo(f"Wrote '{outputfilepath}'.")
-
-    if readme:
-        outputfilepath = directory / constants.README_FILENAME
-        utils.write_readme(text, outputfilepath)
-        click.echo(f"Wrote '{outputfilepath}'.")
-
-    click.echo(timer)
-
-
-if __name__ == "__main__":
-    main()
