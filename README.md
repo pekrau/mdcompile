@@ -4,6 +4,7 @@ mdcompile
 Compile Markdown file(s) to DOCX or PDF. With extensions for hierachy,
 footnotes, indexed terms and references.
 
+```
 Usage: mdc.py [OPTIONS]
 
   Command-line script to compile Markdown file(s).
@@ -20,7 +21,6 @@ Options:
                                   Formats to compile Markdown into.
     -d, --docx                    DOCX format (default).
     -p, --pdf                     PDF format.
-```
 ```
 
 ## Dependencies
