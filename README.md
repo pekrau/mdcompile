@@ -1,8 +1,8 @@
 mdcompile
 =========
 
-Compile Markdown file(s) to DOCX or PDF. With extensions for hierachy,
-footnotes, indexed terms and references.
+Compile Markdown file(s) to DOCX, PDF and EPUB. With extensions for
+hierarchy, footnotes, indexed terms and references.
 
 ```
 Usage: mdc.py [OPTIONS]
@@ -21,6 +21,7 @@ Options:
                                   Formats to compile Markdown into.
     -d, --docx                    DOCX format (default).
     -p, --pdf                     PDF format.
+    -e, --epub                    EPUB format.
 ```
 
 ## Dependencies
