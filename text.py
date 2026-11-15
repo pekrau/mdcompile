@@ -6,6 +6,7 @@ import markdown
 import yaml
 
 import constants
+import utils
 
 
 def read_texts(directory, text_filename, supertext=None, ordinal=None):
@@ -99,7 +100,7 @@ class Text:
 
     @property
     def level(self):
-        "Level of the text in the hierarchy."
+        "Level of this text in the hierarchy."
         result = 0
         supertext = self.supertext
         while supertext is not None:
@@ -108,8 +109,13 @@ class Text:
         return result
 
     @property
+    def depth(self):
+        "The max number of levels from this text."
+        return max([t.level for t in self])
+
+    @property
     def modified(self):
-        "The most recently modified of this text and its subtexts (if any)."
+        "The most recently modification datetime of this text and its subtexts."
         if self.filepath.exists():
             result = dt.datetime.fromtimestamp(self.filepath.stat().st_mtime)
         else:
@@ -117,6 +123,14 @@ class Text:
         for subtext in self.subtexts:
             result = max(result, subtext.modified)
         return result
+
+    @property
+    def identifier(self):
+        "A unique identifier for the text. 'text' followed by ordinals if not specified."
+        try:
+            return self.frontmatter["identifier"]
+        except KeyError:
+            return f"text-{'-'.join([str(i) for i in self.ordinal])}"
 
     @property
     def title(self):

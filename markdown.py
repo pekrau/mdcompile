@@ -106,23 +106,6 @@ class ThematicBreakRenderer:
         return '<hr class="break" />\n'
 
 
-class InternalLink(marko.inline.InlineElement):
-    "Link to an internal location."
-
-    pattern = re.compile(r"\[:\s*([^\]]+)\s*\]")
-    parse_children = False
-
-    def __init__(self, match):
-        self.target = match.group(1)
-
-
-class InternalLinkRenderer:
-    "Output a link to a location in document."
-
-    def render_internal_link(self, element):
-        return f'<a href="#{element.anchor}">{element.location}</a>'  # XXX ?
-
-
 def to_ast(content):
     "Convert Markdown content into an AST (Abstract Syntax Tree) structure."
     converter = marko.Markdown(renderer=marko.ast_renderer.ASTRenderer)
@@ -135,7 +118,6 @@ def to_ast(content):
                 Emdash,
                 Indexed,
                 Reference,
-                InternalLink,
             ],
         )
     )
@@ -157,7 +139,6 @@ def to_html(content):
                 Emdash,
                 Indexed,
                 Reference,
-                InternalLink,
             ],
             renderer_mixins=[
                 SubscriptRenderer,
@@ -166,7 +147,6 @@ def to_html(content):
                 IndexedRenderer,
                 ReferenceRenderer,
                 ThematicBreakRenderer,
-                InternalLinkRenderer,
             ],
         )
     )

@@ -3,7 +3,7 @@
 import re
 import string
 
-VERSION = (0, 7, 0)
+VERSION = (0, 8, 0)
 __version__ = ".".join([str(n) for n in VERSION])
 
 FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)
@@ -17,13 +17,12 @@ DATETIME_ISOFORMAT = "%Y-%m-%d %H:%M"
 TEXT_FILENAME = "text.md"
 README_FILENAME = "README.md"
 OUTPUT_FILENAME = "manuscript"
+CSS_FILENAME = "pico.classless.min.css"
+CSS_URL = "https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css"
 
 MAX_LEVEL = 6
-
-NORMAL = "normal"
-ITALIC = "italic"
-BOLD = "bold"
-UNDERLINE = "underline"
+MAX_PAGE_BREAK_LEVEL = 4
+MAX_TOC_LEVEL = 4
 
 FOOTNOTES_BOOK = "book"
 FOOTNOTES_CHAPTER = "chapter"
@@ -48,65 +47,9 @@ LEXICON = {
         "footnotes": "fotnoter",
         "accessed": "läst",
         "notes": "anteckningar",
+        "title page": "titelsida",
     }
 }
 for k, v in list(LEXICON[SV_SE].items()):  # 'list': Avoid update collision issues.
-    if k.lower() == k:  # If not lower-case, then explicit case.
-        LEXICON[SV_SE][k.capitalize()] = v.capitalize()
-
-DOCX_MAX_PAGE_BREAK_LEVEL = 4
-DOCX_MAX_TOC_LEVEL = 4
-DOCX_TOC_INDENT = 15
-DOCX_TOC_SPACE_BEFORE = 0
-DOCX_TOC_SPACE_AFTER = 0
-DOCX_NORMAL_FONT = "Arial"
-DOCX_FONT_SIZES = [28, 22, 19, 16, 14, 13, 12]
-DOCX_NORMAL_FONT_SIZE = 12
-DOCX_NORMAL_LINE_SPACING = 17
-DOCX_QUOTE_INDENT = 16
-DOCX_QUOTE_FONT_SIZE = 13
-DOCX_CODE_FONT = "Courier"
-DOCX_CODE_FONT_SIZE = 11
-DOCX_CODE_LINE_SPACING = 12
-DOCX_CODE_INDENT = 10
-DOCX_FOOTER_FONT_SIZE = 10
-DOCX_FOOTNOTE_INDENT = 15
-DOCX_CAPTION_INDENT = 15
-DOCX_REFERENCE_INDENT = 10
-DOCX_METADATA_SPACER = 80
-DOCX_INDEXED_INDENT = 15
-DOCX_INDEXED_SPACE_AFTER = 8
-DOCX_DEFAULT_IMAGE_SCALE_FACTOR = 0.6
-DOCX_DEFAULT_PNG_RENDERING_FACTOR = 2.0
-DOCX_CREATED_SPACER = 30
-
-PDF_MAX_PAGE_BREAK_LEVEL = 4
-PDF_MAX_TOC_LEVEL = 4
-PDF_TOC_INDENT = 15
-PDF_TOC_FONT_SIZE = 10
-PDF_TOC_LEADING = 11
-PDF_NORMAL_FONT = "Helvetica"
-PDF_NORMAL_FONT_SIZE = 12
-PDF_NORMAL_LEADING = 17
-PDF_NORMAL_SPACE_BEFORE = 6
-PDF_NORMAL_SPACE_AFTER = 6
-PDF_TITLE_FONT_SIZE = 24
-PDF_TITLE_LEADING = 30
-PDF_TITLE_SPACE_AFTER = 15
-PDF_CODE_FONT = "Courier"
-PDF_CODE_FONT_SIZE = 11
-PDF_CODE_LEADING = 12
-PDF_CODE_INDENT = 10
-PDF_QUOTE_FONT = "Times-Roman"
-PDF_QUOTE_FONT_SIZE = 14
-PDF_QUOTE_LEADING = 16
-PDF_QUOTE_SPACE_BEFORE = 6
-PDF_QUOTE_INDENT = 28
-PDF_FOOTNOTE_SPACE_BEFORE = 6
-PDF_FOOTNOTE_INDENT = 10
-PDF_REFERENCE_SPACE_BEFORE = 7
-PDF_REFERENCE_INDENT = 10
-PDF_IMAGE_SPACE = 12
-PDF_DEFAULT_IMAGE_SCALE_FACTOR = 0.6
-PDF_DEFAULT_PNG_RENDERING_FACTOR = 2.0
-PDF_CREATED_SPACER = 20
+    # Add capitalized variants.
+    LEXICON[SV_SE][k.capitalize()] = v.capitalize()

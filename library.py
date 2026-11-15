@@ -5,8 +5,8 @@ First try explicit location, then use envvar LIBRARY_DIR as fallback.
 import os
 import pathlib
 
-from text import split_file
 import utils
+from text import split_file
 
 
 class Library:

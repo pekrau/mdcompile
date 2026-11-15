@@ -15,6 +15,7 @@ icecream.install()
 import constants
 from docx_compiler import DocxCompiler
 from pdf_compiler import PdfCompiler
+from epub_compiler import EpubCompiler
 from text import read_texts
 
 
@@ -38,23 +39,27 @@ class Timer:
     help=f"Input Markdown file to compile. All sibling directories and files are traversed and compiled together. Default './{constants.TEXT_FILENAME}'.",
 )
 @click.option(
-    "--output_filename",
+    "--output_filepath",
     "-o",
     type=click.Path(exists=False, path_type=pathlib.Path),
-    default=constants.OUTPUT_FILENAME,
-    help=F"Output file. The extension depends on the output format. Default '{constants.OUTPUT_FILENAME}'.",
+    default=f"./{constants.OUTPUT_FILENAME}",
+    help=f"Output file. The extension depends on the output format. Default '{constants.OUTPUT_FILENAME}'.",
 )
-@click.option("--readme", "-r", is_flag=True, help="Write out a 'README.md' file.")
+@click.option(
+    "--readme",
+    "-r",
+    is_flag=True,
+    help=f"Write out a '{constants.README_FILENAME}' file.",
+)
 @optgroup.group(
     "Output formats",
     cls=MutuallyExclusiveOptionGroup,
     help="Formats to compile Markdown into.",
 )
-@optgroup.option(
-    "--docx", "-d", is_flag=True, default=True, help="DOCX format (default)."
-)
+@optgroup.option("--docx", "-d", is_flag=True, help="DOCX format (default).")
 @optgroup.option("--pdf", "-p", is_flag=True, help="PDF format.")
-def main(input_filepath, output_filename, readme, docx, pdf):
+@optgroup.option("--epub", "-e", is_flag=True, help="EPUB format.")
+def main(input_filepath, output_filepath, readme, docx, pdf, epub):
     "Command-line script to compile Markdown file(s)."
     timer = Timer()
     click.echo(f"mdc {constants.__version__}")
@@ -71,13 +76,18 @@ def main(input_filepath, output_filename, readme, docx, pdf):
     except FileNotFoundError as error:
         raise click.UsageError(str(error))
 
+    if not output_filepath.is_absolute():
+        output_filepath = directory / output_filepath
     try:
         if pdf:
             compiler = PdfCompiler(text)
-            output_filename = output_filename.with_suffix(".pdf")
-        elif docx:
+            output_filepath = output_filepath.with_suffix(".pdf")
+        elif epub:
+            compiler = EpubCompiler(text)
+            output_filepath = output_filepath.with_suffix(".epub")
+        else:  # Default DOCX
             compiler = DocxCompiler(text)
-            output_filename = output_filename.with_suffix(".docx")
+            output_filepath = output_filepath.with_suffix(".docx")
     except (ValueError, IOError) as error:
         raise click.UsageError(str(error))
 
@@ -88,7 +98,6 @@ def main(input_filepath, output_filename, readme, docx, pdf):
     )
     click.echo(f"{len(compiler.indexed)} terms indexed.")
 
-    output_filepath = directory / output_filename
     compiler.write(output_filepath)
     if compiler.paragraph_number is not None:
         click.echo(f"{compiler.paragraph_number} paragraphs.")
