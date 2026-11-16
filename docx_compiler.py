@@ -374,7 +374,7 @@ class DocxCompiler(Compiler):
 
         if self.paragraph_number is not None:
             self.paragraph_number += 1
-            self.current_paragraph.add_run(f"{self.paragraph_number}. ").style = (
+            self.current_paragraph.add_run(f"({self.paragraph_number}) ").style = (
                 self.doc.styles["Intense Quote Char"]
             )
 

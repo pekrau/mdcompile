@@ -262,6 +262,10 @@ blockquote {
   padding-left: 1em;
   border-left: 0.5em solid lightgray;
 }
+mark {
+  font-family: 'Courier New', monospace;
+  background-color: white;
+}
 p.codeblock {
   font-family: 'Courier New', monospace;
   margin-left: 3em;

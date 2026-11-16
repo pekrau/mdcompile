@@ -32,7 +32,7 @@ class Compiler:
         fm = self.text.frontmatter
         # Write out the reference title.
         self.reference_title = fm.get("reference-title", False)
-        if fm.get("paragraph_numbers", False):
+        if fm.get("paragraph-numbers", False):
             self.paragraph_number = 0  # Output paragraph numbers.
         else:
             self.paragraph_number = None  # No paragraph numbers.

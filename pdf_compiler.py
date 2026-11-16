@@ -393,7 +393,7 @@ class PdfCompiler(Compiler):
         if self.paragraph_number is not None:
             self.paragraph_number += 1
             self.append('<font face="courier">')
-            self.append(f"{self.paragraph_number}.")
+            self.append(f"({self.paragraph_number})")
             self.append("</font> ")
         for child in ast["children"]:
             self.render(child)

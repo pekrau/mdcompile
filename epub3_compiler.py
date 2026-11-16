@@ -260,7 +260,7 @@ class Epub3Compiler(Compiler):
                 self.footnote_def_flag = -1
         if self.paragraph_number is not None:
             self.paragraph_number += 1
-            self.append(f"<mark>{self.paragraph_number}.</mark> ")
+            self.append(f"<mark>({self.paragraph_number})</mark> ")
         for child in ast["children"]:
             self.render(child)
         self.append("</p>")
