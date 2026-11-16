@@ -32,11 +32,11 @@ class Timer:
 @click.command()
 @click.help_option("--help", "-h")
 @click.option(
-    "--input_filepath",
+    "--input_path",
     "-i",
     type=click.Path(exists=True, resolve_path=True, path_type=pathlib.Path),
     default=f"./{constants.TEXT_FILENAME}",
-    help=f"Input Markdown file to compile. All sibling directories and files are traversed and compiled together. Default './{constants.TEXT_FILENAME}'.",
+    help=f"Input Markdown file or directory. All '*.md' files in the sibling directories are included. Default './{constants.TEXT_FILENAME}'.",
 )
 @click.option(
     "--output_filepath",
@@ -59,17 +59,17 @@ class Timer:
 @optgroup.option("--docx", "-d", is_flag=True, help="DOCX format (default).")
 @optgroup.option("--pdf", "-p", is_flag=True, help="PDF format.")
 @optgroup.option("--epub3", "-e", is_flag=True, help="EPUB3 format.")
-def main(input_filepath, output_filepath, readme, docx, pdf, epub3):
+def main(input_path, output_filepath, readme, docx, pdf, epub3):
     "Command-line script to compile Markdown file(s)."
     timer = Timer()
     click.echo(f"mdc {constants.__version__}")
 
-    if input_filepath.is_dir():
-        directory = input_filepath
+    if input_path.is_dir():
+        directory = input_path
         text_filename = constants.TEXT_FILENAME
     else:
-        directory = input_filepath.parent
-        text_filename = input_filepath.name
+        directory = input_path.parent
+        text_filename = input_path.name
 
     try:
         text = read_texts(directory, text_filename)

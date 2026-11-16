@@ -7,7 +7,7 @@ import constants
 
 
 def normalize(s):
-    "Normalize string to ASCII, fold case, replace non-file characters with '-'."
+    "Normalize string to ASCII, fold case, replace non-safe characters with '-'."
     result = unicodedata.normalize("NFKD", s).encode("ASCII", "ignore")
     result = "".join(
         [c if c in constants.SAFE_CHARACTERS else "-" for c in result.decode("utf-8")]

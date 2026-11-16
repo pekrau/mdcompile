@@ -219,9 +219,10 @@ class Epub3Compiler(Compiler):
         items = sorted(self.indexed.items(), key=lambda i: i[0].casefold())
         for canonical, texts in items:
             self.push()
-            self.append(f"<dl><dt>{escape(canonical)}</dt>")
+            self.append("<dl>")
+            self.append(f'<dt><a id="{utils.normalize(escape(canonical))}"/>{escape(canonical)}</dt>')
             for text in texts:
-                self.append(f"<dd>{escape(text.ordinal_title)}</dd>")
+                self.append(f'<dd><a href="{text.identifier}.xhtml">{escape(text.ordinal_title)}</a></dd>')
             self.append("</dl>")
             self.pop()
         self.pop()
@@ -342,7 +343,7 @@ class Epub3Compiler(Compiler):
         self.append(f'<a href="{ast["dest"]}">')
         for child in ast["children"]:
             self.render(child)
-        self.append("</a>")
+        self.append("↗</a>")
         self.pop()
 
     def render_list(self, ast):
@@ -368,16 +369,14 @@ class Epub3Compiler(Compiler):
         self.pop()
 
     def render_indexed(self, ast):
-        # XXX Link to item in Index section.
-        self.append(f'<u>{escape(ast["term"])}</u>')
+        self.append(f'<em><a href="index.xhtml#{utils.normalize(ast["canonical"])}">{escape(ast["term"])}</a></em>')
 
     def render_footnote_ref(self, ast):
         self.append(f'<sup><strong>{ast["number"]}</strong></sup>')
 
     def render_reference(self, ast):
-        # XXX Link to Reference section.
         self.push()
-        self.append(escape(ast["name"]))
+        self.append(f'<a href="references.xhtml#{utils.normalize(ast["name"])}">{escape(ast["name"])}</a>')
         if self.reference_title:
             self.append(": ")
             reference = self.referenced[ast["name"]]

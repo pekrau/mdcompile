@@ -1,7 +1,7 @@
 mdcompile
 =========
 
-Compile Markdown file(s) to DOCX, PDF and EPUB. With extensions for
+Compile Markdown file(s) to DOCX, PDF and EPUB3. With extensions for
 hierarchy, footnotes, indexed terms and references.
 
 ```
@@ -11,9 +11,9 @@ Usage: mdc.py [OPTIONS]
 
 Options:
   -h, --help                      Show this message and exit.
-  -i, --input_filepath PATH       Input Markdown file to compile. All sibling
-                                  directories and files are traversed and
-                                  compiled together. Default './text.md'.
+  -i, --input_path PATH           Input Markdown file or directory. All '*.md'
+                                  files in the sibling directories are
+                                  included. Default './text.md'.
   -o, --output_filename PATH      Output file. The extension depends on the
                                   output format. Default 'manuscript'.
   -r, --readme                    Write out a 'README.md' file.
@@ -21,7 +21,7 @@ Options:
                                   Formats to compile Markdown into.
     -d, --docx                    DOCX format (default).
     -p, --pdf                     PDF format.
-    -e, --epub                    EPUB format.
+    -e, --epub3                   EPUB3 format.
 ```
 
 ## Dependencies
