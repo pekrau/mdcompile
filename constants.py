@@ -3,7 +3,7 @@
 import re
 import string
 
-VERSION = (0, 8, 0)
+VERSION = (0, 8, 1)
 __version__ = ".".join([str(n) for n in VERSION])
 
 FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)
@@ -40,7 +40,7 @@ SV_SE = "sv-SE"
 LEXICON = {
     SV_SE: {  # Key: 'en-GB' term; value: 'sv-SE' term.
         "created": "skapad",
-        "latest modification": "senast ändrad",
+        "last modification": "senast ändrad",
         "contents": "innehåll",
         "references": "referenser",
         "index": "register",

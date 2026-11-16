@@ -86,15 +86,15 @@ class DocxCompiler(Compiler):
         style.paragraph_format.line_spacing = docx.shared.Pt(12)
         style.paragraph_format.left_indent = docx.shared.Pt(11)
 
-        # Set Dublin core metadata.
+        # Dublin core metadata.
         self.doc.core_properties.title = self.text.title
+        self.doc.core_properties.language = self.text.language
         self.doc.core_properties.author = ", ".join(self.text.authors)
+        self.doc.core_properties.contributor = f"mdcompile {constants.__version__}"
+        self.doc.core_properties.category = "book" if self.text.subtexts else "essay"
         if self.text.subtitle:
             self.doc.core_properties.subject = self.text.subtitle
-        self.doc.core_properties.language = self.text.language
-        self.doc.core_properties.creator = (f"mdcompile {constants.__version__}",)
-        self.doc.core_properties.created = dt.datetime.now()
-        self.doc.core_properties.modified = self.text.modified
+        self.doc.core_properties.date = self.text.modified
 
         # Display page number in the DOCX header on each page.
         # https://stackoverflow.com/questions/56658872/add-page-number-using-python-docx
@@ -126,10 +126,13 @@ class DocxCompiler(Compiler):
             if author != self.text.authors[-1]:
                 paragraph.add_run(", ")
         paragraph = self.doc.add_paragraph(style="Normal")
-        paragraph.paragraph_format.space_after = docx.shared.Pt(30)
+        if rights := self.text.frontmatter.get("rights"):
+            paragraph.add_run(rights)
+        paragraph = self.doc.add_paragraph(style="Normal")
         paragraph.add_run(
-            f'{self.tx("Latest modification")}: {utils.isoformat(self.text.modified)}'
+            f'{self.tx("Last modification")}: {utils.isoformat(self.text.modified)}'
         ).font.italic = True
+        paragraph.paragraph_format.space_after = docx.shared.Pt(30)
         self.render(self.text.ast, level=3)
         self.write_footnotes_text(self.text)
 
@@ -157,7 +160,11 @@ class DocxCompiler(Compiler):
             paragraph.paragraph_format.first_line_indent = -docx.shared.Pt(15)
             paragraph.paragraph_format.left_indent = docx.shared.Pt(15 * text.level)
             paragraph.add_run(text.ordinal_title)
-            if self.footnotes_location == constants.FOOTNOTES_CHAPTER and text.level == 1 and text.footnotes:
+            if (
+                self.footnotes_location == constants.FOOTNOTES_CHAPTER
+                and text.level == 1
+                and text.footnotes
+            ):
                 previous_chapter_footnotes = True
         else:
             if previous_chapter_footnotes:
@@ -175,8 +182,7 @@ class DocxCompiler(Compiler):
 
     def write_text_setup(self, text):
         "Set up for the next text."
-        if self.text.level == 1:
-            self.doc.add_page_break()
+        self.doc.add_page_break()
         self.write_heading(text.ordinal_title, text.level)
 
     def write_footnotes_chapter(self, text):
@@ -205,10 +211,10 @@ class DocxCompiler(Compiler):
         "Write the references section, if any references."
         if not self.referenced:
             return
-        if self.text.subtexts: # Book; references in separate section.
+        if self.text.subtexts:  # Book; references in separate section.
             self.doc.add_page_break()
             paragraph = self.doc.add_paragraph(style="Title 1")
-        else: # Essay; references after the text; no page break.
+        else:  # Essay; references after the text; no page break.
             paragraph = self.doc.add_paragraph(style="Title 3")
         paragraph.add_run(self.tx("References"))
         for name, reference in sorted(self.referenced.items()):
@@ -297,7 +303,9 @@ class DocxCompiler(Compiler):
             paragraph = self.doc.add_paragraph(canonical, style="Body Text")
             paragraph.paragraph_format.keep_with_next = True
             for text in texts:
-                paragraph = self.doc.add_paragraph(text.ordinal_title, style="Body Text")
+                paragraph = self.doc.add_paragraph(
+                    text.ordinal_title, style="Body Text"
+                )
                 paragraph.paragraph_format.left_indent = docx.shared.Pt(15)
                 if text is not texts[:-1]:
                     paragraph.paragraph_format.keep_with_next = True

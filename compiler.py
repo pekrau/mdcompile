@@ -33,9 +33,9 @@ class Compiler:
         # Write out the reference title.
         self.reference_title = fm.get("reference-title", False)
         if fm.get("paragraph_numbers", False):
-            self.paragraph_number = 0
+            self.paragraph_number = 0  # Output paragraph numbers.
         else:
-            self.paragraph_number = None
+            self.paragraph_number = None  # No paragraph numbers.
 
         # Book; has subtexts.
         if self.text.subtexts:

@@ -53,7 +53,7 @@ class PdfCompiler(Compiler):
             ParagraphStyle(
                 name="Index",
                 parent=self.stylesheet["Normal"],
-                leading=12,     # Cannot set to 0: the clickable area in index page lost.
+                leading=12,  # Cannot set to 0: the clickable area in index page lost.
             )
         )
         self.stylesheet.add(
@@ -125,10 +125,14 @@ class PdfCompiler(Compiler):
             self.write_heading(self.text.subtitle, 1)
         for author in self.text.authors:
             self.write_heading(", ".join(self.text.authors), 2)
-        text = (
-            f'{self.tx("Latest modification")}: {utils.isoformat(self.text.modified)}'
+        if rights := self.text.frontmatter.get("rights"):
+            self.flowables.append(Paragraph(rights, style=self.stylesheet["Normal"]))
+        self.flowables.append(
+            Paragraph(
+                f'{self.tx("Last modification")}: {utils.isoformat(self.text.modified)}',
+                style=self.stylesheet["Italic"],
+            )
         )
-        self.flowables.append(Paragraph(text, style=self.stylesheet["Italic"]))
         # Spacer beneath header items.
         self.flowables.append(Spacer(0, 20))
         self.render(self.text.ast, level=3)
@@ -161,8 +165,7 @@ class PdfCompiler(Compiler):
 
     def write_text_setup(self, text):
         "Set up for the next text."
-        if text.level == 1:
-            self.flowables.append(NotAtTopPageBreak())
+        self.flowables.append(NotAtTopPageBreak())
         self.write_heading(text.ordinal_title, text.level, target=text.identifier)
 
     def write_footnotes_chapter(self, text):
@@ -194,11 +197,11 @@ class PdfCompiler(Compiler):
         if not self.referenced:
             return
         title = self.tx("References")
-        if self.text.subtexts: # Book; references in separate section.
+        if self.text.subtexts:  # Book; references in separate section.
             self.flowables.append(NotAtTopPageBreak())
             self.flowables.append(TocMarker(0, title, "__references__"))
             self.flowables.append(Paragraph(title, style=self.stylesheet["Heading1"]))
-        else: # Essay; references after the text; no page break, no TOC.
+        else:  # Essay; references after the text; no page break, no TOC.
             self.flowables.append(Paragraph(title, style=self.stylesheet["Heading3"]))
         for name, reference in sorted(self.referenced.items()):
             self.push("Reference")
@@ -296,8 +299,8 @@ class PdfCompiler(Compiler):
         with open(str(output_filepath), "wb") as outfile:
             props = dict(
                 title=self.text.title,
-                author=", ".join(self.text.authors) or None,
                 language=self.text.language,
+                author=", ".join(self.text.authors) or None,
                 creator=f"mdcompile {constants.__version__}",
                 date=self.text.modified,
             )
@@ -366,7 +369,9 @@ class PdfCompiler(Compiler):
                 )
         elif add:
             if preformatted:
-                self.flowables.append(Preformatted(text, style=self.stylesheet[stylename]))
+                self.flowables.append(
+                    Preformatted(text, style=self.stylesheet[stylename])
+                )
             else:
                 self.flowables.append(Paragraph(text, style=self.stylesheet[stylename]))
         else:

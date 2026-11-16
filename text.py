@@ -126,11 +126,14 @@ class Text:
 
     @property
     def identifier(self):
-        "A unique identifier for the text. 'text' followed by ordinals if not specified."
+        "A unique identifier for the text. May be specified in the frontmatter."
         try:
             return self.frontmatter["identifier"]
         except KeyError:
-            return f"text-{'-'.join([str(i) for i in self.ordinal])}"
+            if self.supertext:
+                return f"text-{'-'.join([str(i) for i in self.ordinal])}"
+            else:
+                return utils.normalize(self.title)
 
     @property
     def title(self):

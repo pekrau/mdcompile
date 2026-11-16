@@ -1,28 +1,38 @@
-"Compile Markdown file(s) to EPUB."
+"Compile Markdown file(s) to EPUB3."
 
 import datetime as dt
 import pathlib
 from xml.sax.saxutils import escape
 
 import constants
-import epub
+import miniepub3 as epub3
 import utils
 from compiler import Compiler
 
 
-class EpubCompiler(Compiler):
-    "Compile Markdown file(s) to EPUB."
+class Epub3Compiler(Compiler):
+    "Compile Markdown file(s) to EPUB3."
 
     def write_setup(self):
-        "Set up the EPUB document."
-        self.book = epub.Book(self.text.identifier, self.text.title, self.text.language)
-        if self.text.subtitle:
-            self.book.description = self.text.subtitle
+        "Set up the EPUB3 document."
+        self.book = epub3.Book(
+            self.text.identifier, self.text.title, self.text.language
+        )
         for author in self.text.authors:
             self.book.creators.append(author)
         self.book.contributor = f"mdcompile {constants.__version__}"
-        self.book.date = self.text.modified.isoformat()
         self.book.type = "book" if self.text.subtexts else "essay"
+        if self.text.subtitle:
+            self.book.description = self.text.subtitle
+        if source := self.text.frontmatter.get("source"):
+            self.book.source = source
+        if subject := self.text.frontmatter.get("subject"):
+            self.book.subject = subject
+        if publisher := self.text.frontmatter.get("publisher"):
+            self.book.publisher = publisher
+        if rights := self.text.frontmatter.get("rights"):
+            self.book.rights = rights
+        self.book.date = self.text.modified.isoformat()
         self.stack = []
 
     def push(self):
@@ -48,33 +58,35 @@ class EpubCompiler(Compiler):
     def write_title_page(self):
         "Write the title page. If no subtexts, this is all content except references."
         title = self.tx("Title page") if self.text.subtexts else self.text.title
-        self.current_section = epub.Section(title)
-        self.book.add_section("title_page", self.current_section)
+        self.current_section = epub3.Section("title_page", title)
+        self.book.add_section(self.current_section)
         self.push()
         self.append(f"<h1>{escape(self.text.title)}</h1>")
         if self.text.subtitle:
             self.append(f"<h2>{escape(self.text.subtitle)}</h2>")
         self.append(f'<h3>{"<br/>".join(self.text.authors)}</h3>')
+        if rights := self.text.frontmatter.get("rights"):
+            self.append(f"<p>{rights}</p>")
         self.append(
-            f"<p><em>{self.tx('Latest modification')}: {utils.isoformat(self.text.modified)}</em></p>"
+            f"<p><em>{self.tx('Last modification')}: {utils.isoformat(self.text.modified)}</em></p>"
         )
         self.pop()
         self.render(self.text.ast, level=3)
         self.write_footnotes_text(self.text)
 
     def write_toc(self):
-        "Set up TOC. Done automatically by 'epub.write'"
+        "Set up TOC. Done automatically by 'epub3.write'"
         pass
 
     def write_text_setup(self, text):
         "Set up for the next text. Output the text title. Record section for TOC."
         title = text.ordinal_title
-        self.current_section = text.section = epub.Section(title)
+        self.current_section = text.section = epub3.Section(text.identifier, title)
         self.write_heading(text.ordinal_title, text.level)
-        if text.supertext is self.text: # First-level subtext; chapter.
-            self.book.add_section(text.identifier, self.current_section)
+        if text.supertext is self.text:  # First-level subtext; chapter.
+            self.book.add_section(self.current_section)
         else:
-            text.supertext.section.add_subsection(text.identifier, self.current_section)
+            text.supertext.section.add_section(self.current_section)
 
     def write_footnotes_chapter(self, text):
         "Write out footnotes for the chapter, if that mode and any footnotes."
@@ -83,9 +95,9 @@ class EpubCompiler(Compiler):
         if not self.footnotes_location == constants.FOOTNOTES_CHAPTER:
             return
         title = self.tx("Footnotes")
-        self.current_section = epub.Section(title)
+        self.current_section = epub3.Section(f"footnotes_{text.identifier}", title)
         sections = list(self.book.sections.values())
-        sections[-1].add_subsection(f"footnotes_{text.identifier}", self.current_section)
+        sections[-1].add_section(self.current_section)
         self.write_heading(title, 2)
         self.write_footnotes_items(text)
 
@@ -96,8 +108,8 @@ class EpubCompiler(Compiler):
         if not self.footnotes_location == constants.FOOTNOTES_BOOK:
             return
         title = self.tx("Footnotes")
-        self.current_section = epub.Section(title)
-        self.text.section.add_subsection("footnotes", self.current_section)
+        self.current_section = epub3.Section("footnotes", title)
+        self.text.section.add_section(self.current_section)
         self.write_heading(title, 1)
         self.write_footnotes_items(self.text)
 
@@ -106,11 +118,11 @@ class EpubCompiler(Compiler):
         if self.referenced:
             self.push()
             title = self.tx("References")
-            if self.text.subtexts: # Book; references in a separate section.
-                self.current_section =  epub.Section(title)
-                self.book.add_section("references", self.current_section)
+            if self.text.subtexts:  # Book; references in a separate section.
+                self.current_section = epub3.Section("references", title)
+                self.book.add_section(self.current_section)
                 self.append(f"<h1>{title}</h1>")
-            else:               # Essay; references after the text; no new section.
+            else:  # Essay; references after the text; no new section.
                 self.references_section = None
                 self.append(f"<h3>{title}</h3>")
             self.pop()
@@ -190,9 +202,7 @@ class EpubCompiler(Compiler):
         if published := reference.get("published"):
             self.append(f" {self.tx('published')} {published}")
         if href := reference.get("href"):
-            self.append(
-                f' <a href="{href}" underline="true" color="royalblue">{escape(href)}</a>'
-            )
+            self.append(f' <a href="{href}">{escape(href)}</a>')
             if accessed := reference.get("accessed"):
                 self.append(f" ({self.tx('accessed')} {accessed})")
         self.append(".")
@@ -202,8 +212,8 @@ class EpubCompiler(Compiler):
         if not self.indexed:
             return
         title = self.tx("Index")
-        self.current_section = epub.Section(title)
-        self.book.add_section("index", self.current_section)
+        self.current_section = epub3.Section("index", title)
+        self.book.add_section(self.current_section)
         self.push()
         self.append(f"<h1>{title}</h1>")
         items = sorted(self.indexed.items(), key=lambda i: i[0].casefold())
@@ -215,9 +225,9 @@ class EpubCompiler(Compiler):
             self.append("</dl>")
             self.pop()
         self.pop()
-        
+
     def write_to_file(self, output_filepath):
-        "Write the EPUB contents to file."
+        "Write the EPUB3 contents to file."
         self.book.write(output_filepath)
 
     def render_document(self, ast):
@@ -270,7 +280,7 @@ class EpubCompiler(Compiler):
         self.append(f'<code>{escape(ast["children"])}</code>')
 
     def render_code_block(self, ast):
-        # The <pre> element does not seem to work in common EPUB readers?
+        # The <pre> element does not seem to work in common EPUB3 readers?
         # This is a workaround.
         self.push()
         self.append('<p class="codeblock">')

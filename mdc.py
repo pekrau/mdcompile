@@ -15,7 +15,7 @@ icecream.install()
 import constants
 from docx_compiler import DocxCompiler
 from pdf_compiler import PdfCompiler
-from epub_compiler import EpubCompiler
+from epub3_compiler import Epub3Compiler
 from text import read_texts
 
 
@@ -58,8 +58,8 @@ class Timer:
 )
 @optgroup.option("--docx", "-d", is_flag=True, help="DOCX format (default).")
 @optgroup.option("--pdf", "-p", is_flag=True, help="PDF format.")
-@optgroup.option("--epub", "-e", is_flag=True, help="EPUB format.")
-def main(input_filepath, output_filepath, readme, docx, pdf, epub):
+@optgroup.option("--epub3", "-e", is_flag=True, help="EPUB3 format.")
+def main(input_filepath, output_filepath, readme, docx, pdf, epub3):
     "Command-line script to compile Markdown file(s)."
     timer = Timer()
     click.echo(f"mdc {constants.__version__}")
@@ -82,8 +82,8 @@ def main(input_filepath, output_filepath, readme, docx, pdf, epub):
         if pdf:
             compiler = PdfCompiler(text)
             output_filepath = output_filepath.with_suffix(".pdf")
-        elif epub:
-            compiler = EpubCompiler(text)
+        elif epub3:
+            compiler = Epub3Compiler(text)
             output_filepath = output_filepath.with_suffix(".epub")
         else:  # Default DOCX
             compiler = DocxCompiler(text)

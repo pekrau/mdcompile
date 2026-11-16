@@ -1,8 +1,13 @@
-"""Simple generator of EPUB format file.
-Based on the minimal EPUB example in https://github.com/thansen0/sample-epub-minimal
+"""Minimalist module for generating a EPUB3 format file.
+Based on the minimal EPUB3 example in https://github.com/thansen0/sample-epub-minimal
+
+TODO:
+- add image
 """
 
-__version__ = "1.0"
+__version__ = "0.8"
+
+__all__ = ["Book", "Section", "minixml", "__version__"]
 
 import datetime as dt
 import zipfile
@@ -11,21 +16,19 @@ import minixml
 
 
 class Book:
-    "Container for data to write out as  EPUB format file."
+    "Book to write out as  EPUB3 format file."
 
     def __init__(self, identifier, title, language="sv-SE", toc_stylename="default"):
         self.identifier = identifier  # Dublin Core
         self.title = title  # Dublin Core
         self.language = language  # Dublin Core
-        self.toc_stylename = (
-            toc_stylename  # CSS stylesheet for TOC, if None then no TOC.
-        )
+        self.toc_stylename = toc_stylename  # CSS stylesheet for TOC, if any.
         self.creators = []  # Dublin Core for authors
         self.contributors = []  # Dublin core
         self.type = None  # Dublin Core
+        self.description = None  # Dublin Core
         self.source = None  # Dublin Core
         self.subject = None  # Dublin Core
-        self.description = None  # Dublin Core
         self.publisher = None  # Dublin Core
         self.rights = None  # Dublin Core
         self.date = None  # Dublin Core
@@ -37,21 +40,25 @@ class Book:
         "Add the CSS contents under the given name."
         self.css[name] = content
 
-    def add_section(self, name, section):
-        """Add a named Section instance having title, stylesheet name and XHTML content.
+    def add_section(self, section):
+        """Add a Section instance having name, title, stylesheet name and XHTML content.
         The order of addition is significant.
         """
         assert isinstance(section, Section)
-        assert section.stylename in self.css
-        self.sections[name] = section
+        assert section.stylename is None or section.stylename in self.css
+        assert section.content
+        assert isinstance(section.content, minixml.Element)
+        if section.name in self.sections:
+            raise ValueError(f"section name '{section.name}' is already in book")
+        self.sections[section.name] = section
         section.book = self
 
     def get_all_sections(self):
-        "Get all sections, including subsections."
+        "Get a list of all sections, including subsections."
         result = []
-        for name, section in self.sections.items():
-            result.append((name, section))
-            result.extend(section.get_all_subsections())
+        for section in self.sections.values():
+            result.append(section)
+            result.extend(section.get_all_sections())
         return result
 
     def get_container_xml(self):
@@ -68,12 +75,12 @@ class Book:
 
     def get_content_opf(self):
         "Return XML content for the 'content.opf' file."
-        result = minixml.Element(
+        root = minixml.Element(
             "package", xmlns="http://www.idpf.org/2007/opf", version="3.0"
         )
-        result["xmlns:dc"] = "http://purl.org/dc/elements/1.1/"
-        result["unique-identifier"] = "identifier"
-        metadata = result.create("metadata")
+        root["xmlns:dc"] = "http://purl.org/dc/elements/1.1/"
+        root["unique-identifier"] = "identifier"
+        metadata = root.create("metadata")
         metadata.create("dc:title", id="title").append(self.title)
         metadata.create("dc:identifier", id="identifier").append(self.identifier)
         metadata.create("dc:language").append(self.language)
@@ -100,23 +107,25 @@ class Book:
         metadata.create("meta", property="dcterms:modified").append(
             dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         )
-        manifest = result.create("manifest")
+        manifest = root.create("manifest")
         if self.toc_stylename:
             item = manifest.create("item", id="toc", href="toc.xhtml", properties="nav")
             item["media-type"] = "application/xhtml+xml"
         for name in self.css:
             item = manifest.create("item", id=f"{name}_css", href=f"CSS/{name}.css")
             item["media-type"] = "text/css"
-        for name, section in self.get_all_sections():
-            item = manifest.create("item", id=name, href=f"{name}.xhtml")
+        for section in self.get_all_sections():
+            item = manifest.create(
+                "item", id=section.name, href=f"{section.name}.xhtml"
+            )
             item["media-type"] = "application/xhtml+xml"
 
-        spine = result.create("spine")
+        spine = root.create("spine")
         if self.toc_stylename:
             spine.create("itemref", idref="toc")
-        for name, section in self.get_all_sections():
-            spine.create("itemref", idref=name)
-        return repr(result)
+        for section in self.get_all_sections():
+            spine.create("itemref", idref=section.name)
+        return repr(root)
 
     def get_toc_xhtml(self):
         "Return the XHTML content for the TOC file."
@@ -141,11 +150,11 @@ class Book:
         for name, section in self.sections.items():
             li = ol.create("li")
             li.create("a", href=f"{name}.xhtml").append(section.toc_title)
-            section.append_subsections_list(li)
+            section.append_sections_list(li)
         return repr(html)
 
     def write(self, outfile):
-        "Write the EPUB file."
+        "Write the EPUB3 file."
         with zipfile.ZipFile(
             outfile, mode="w", compression=zipfile.ZIP_DEFLATED, compresslevel=9
         ) as zip:
@@ -164,75 +173,83 @@ class Book:
             zip.writestr("OEBPS/content.opf", self.get_content_opf())
             if self.toc_stylename:
                 zip.writestr("OEBPS/toc.xhtml", self.get_toc_xhtml())
-            for name, section in self.get_all_sections():
-                zip.writestr(f"OEBPS/{name}.xhtml", str(section))
+            for section in self.get_all_sections():
+                zip.writestr(f"OEBPS/{section.name}.xhtml", str(section))
 
 
 class Section:
-    "XHTML code container."
+    "Section in Book; XHTML code container."
 
-    def __init__(self, toc_title, content=None, stylename="default"):
-        """The toc_title is used for the HTML HEAD element and for the TOC.
-        It is *not* automatically output to the beginning of the BODY content.
+    def __init__(self, name, toc_title=None, content=None, stylename="default"):
+        """The 'name' is used for the XHTML file in the EPUB3 book.
+        It must be unique in the book.
+        The 'toc_title' is used for the HTML HEAD element and for the TOC.
+        If None, then this section will not present in the TOC.
+        The 'toc_title' is *not* output to the beginning of the content BODY.
         """
-        assert toc_title
+        assert name
         assert content is None or isinstance(content, (str, minixml.Element))
+        self.name = name
         self.toc_title = toc_title
         self.stylename = stylename
-        self.html = minixml.Element("html", xmlns="http://www.w3.org/1999/xhtml")
-        self.html["xmlns:epub"] = "http://www.idpf.org/2007/ops"
-        head = self.html.create("head")
+        self.content = minixml.Element("html", xmlns="http://www.w3.org/1999/xhtml")
+        self.content["xmlns:epub"] = "http://www.idpf.org/2007/ops"
+        head = self.content.create("head")
         head.create("title").append(toc_title)
-        head.create(
-            "link", href=f"CSS/{stylename}.css", rel="stylesheet", type="text/css"
-        )
-        self.body = self.html.create("body")
+        if stylename:
+            head.create(
+                "link", href=f"CSS/{stylename}.css", rel="stylesheet", type="text/css"
+            )
+        self.body = self.content.create("body")
         if content:
             self.append(content)
         self.subsections = {}
 
     def __str__(self):
         "Return the XHTML code for the file."
-        return repr(self.html)
+        return repr(self.content)
 
     def append(self, content):
-        """The content may be an 'minixml.Element' instance. If the content is a string,
-        then will be parsed using 'minixml.parse'.
+        """The content is either an 'minixml.Element' instance or a string.
+        If a string, then it will be parsed using 'minixml.parse'.
         The content must *not* contain the 'html', 'head' and 'body' elements; these
         elements are automatically wrapped around the content, which must be valid XHTML.
         """
         if isinstance(content, str):
-            for elem in list(minixml.parse(f"<tmp>{content}</tmp>").subelements):
+            for elem in list(minixml.parse(f"<tmp>{content}</tmp>").children):
                 self.body.append(elem.free())
         elif isinstance(content, minixml.Element):
             self.body.append(content)
         else:
             raise ValueError(f"invalid content type: {type(content)}")
 
-    def add_subsection(self, name, section):
+    def add_section(self, section):
         "Add a named subsection. The order of addition is significant."
         assert isinstance(section, Section)
-        assert section.stylename in self.book.css
-        self.subsections[name] = section
+        assert section.stylename is None or section.stylename in self.book.css
+        self.subsections[section.name] = section
         section.book = self.book
 
-    def get_all_subsections(self):
-        "Get all subsections recursively."
+    def get_all_sections(self):
+        "Get all subsections recursively as list of sections."
         result = []
-        for name, subsection in self.subsections.items():
-            result.append((name, subsection))
-            result.extend(subsection.get_all_subsections())
+        for subsection in self.subsections.values():
+            result.append(subsection)
+            result.extend(subsection.get_all_sections())
         return result
 
-    def append_subsections_list(self, li):
-        "Append the list for the subsections to the list item, recursively. For the TOC."
-        if not self.subsections:
+    def append_sections_list(self, li):
+        """Append the subsections of this section to the TOC list item, recursively.
+        If the 'toc_title' of a subsection is None, it will not be added to the list.
+        """
+        subsections = [s for s in self.subsections.values() if s.toc_title]
+        if not subsections:
             return
         ol = li.create("ol")
-        for name, subsection in self.subsections.items():
+        for subsection in subsections:
             li = ol.create("li")
-            li.create("a", href=f"{name}.xhtml").append(subsection.toc_title)
-            subsection.append_subsections_list(li)
+            li.create("a", href=f"{subsection.name}.xhtml").append(subsection.toc_title)
+            subsection.append_sections_list(li)
 
 
 DEFAULT_CSS = """body {
@@ -257,12 +274,11 @@ if __name__ == "__main__":
 
     book = Book("abc123", "Test")
     book.creators.append("Per Kraulis")
-    book.contributors.append(f"epub {__version__}")
+    book.contributors.append(f"miniepub3 {__version__}")
     book.type = "test"
     book.source = "Python"
     book.subject = "testing"
     book.description = "Testing a few chapters, a subsection, and a TOC."
-    book.rights = "Copyright (C) 2026 Per Kraulis"
     book.add_section(
         "chapter_1",
         Section(
@@ -315,7 +331,7 @@ if __name__ == "__main__":
     )
 
     book.add_section("copyright", section)
-    section.add_subsection(
+    section.add_section(
         "additional", Section("Additional stuff", content="<p>Some more stuff.</p>")
     )
     book.write("minimal.epub")
