@@ -1,8 +1,5 @@
-"""Interface to library containing references to articles and books.
-First try explicit location, then use envvar LIBRARY_DIR as fallback.
-"""
+"Interface to library containing references to articles and books."
 
-import os
 import pathlib
 
 import utils
@@ -12,18 +9,15 @@ from text import split_file
 class Library:
     "Interface to library containing references to articles and books."
 
-    def __init__(self, dirpath=None):
-        if dirpath:
-            self.dirpath = pathlib.Path(dirpath)
-        else:
-            try:
-                self.dirpath = pathlib.Path(os.environ["LIBRARY_DIR"])
-            except KeyError:
-                raise IOError("environment variable LIBRARY_DIR not defined")
-        if not self.dirpath.exists():
-            raise IOError(f"no such library directory: {self.dirpath}")
-        if not self.dirpath.is_dir():
-            raise IOError(f"library path is not a directory: {self.dirpath}")
+    def __init__(self, dirpath):
+        if not dirpath:
+            raise ValueError("no dirpath provided")
+        dirpath = pathlib.Path(dirpath)
+        if not dirpath.exists():
+            raise IOError(f"no such library directory: {dirpath}")
+        if not dirpath.is_dir():
+            raise IOError(f"library path is not a directory: {dirpath}")
+        self.dirpath = dirpath
 
     def __str__(self):
         return str(self.dirpath)
@@ -35,5 +29,5 @@ class Library:
         "Return the reference as a dictionary, given the name 'Lastname year'."
         filepath = self.dirpath / f"{utils.safe(name)}.md"
         if not filepath.exists():
-            raise KeyError(f"no such reference: '{name}'")
-        return split_file(filepath)[0]  # frontmatter only.
+            raise KeyError(name)
+        return split_file(filepath)[0]  # Return frontmatter only.

@@ -133,6 +133,7 @@ class DocxCompiler(Compiler):
             f'{self.tx("Last modification")}: {utils.isoformat(self.text.modified)}'
         ).font.italic = True
         paragraph.paragraph_format.space_after = docx.shared.Pt(30)
+        self.within_footnote = False
         self.render(self.text.ast, level=3)
         self.write_footnotes_text(self.text)
 
@@ -332,22 +333,11 @@ class DocxCompiler(Compiler):
         paragraph.add_run(ast["children"][0]["children"])
 
     def render_paragraph(self, ast):
-        self.current_paragraph = self.doc.add_paragraph()
+        # NOTE: this flag may have value -True, denoting continued definition.
+        if self.within_footnote == False: # If footnote started, then paragraph created.
+            self.current_paragraph = self.doc.add_paragraph()
 
-        # Either starting footnote definition, or within it.
-        if self.footnote_def_flag is not None:
-            self.current_paragraph.paragraph_format.left_indent = docx.shared.Pt(15)
-            # Starting footnote definition.
-            if self.footnote_def_flag > 0:
-                self.current_paragraph.paragraph_format.first_line_indent = (
-                    docx.shared.Pt(-15)
-                )
-                run = self.current_paragraph.add_run(f"{self.footnote_def_flag}.")
-                run.font.bold = True
-                self.current_paragraph.add_run(" ")
-                # Signal for being within footnote definition.
-                self.footnote_def_flag = -1
-
+        # Handle list special case.
         if self.list_stack:
             data = self.list_stack[-1]
             levels = min(3, data["levels"])  # Max list levels in predef list styles.
@@ -372,6 +362,7 @@ class DocxCompiler(Compiler):
         else:
             self.current_paragraph.style = self.style_stack[-1]
 
+        # Prepend paragraph number.
         if self.paragraph_number is not None:
             self.paragraph_number += 1
             self.current_paragraph.add_run(f"({self.paragraph_number}) ").style = (
@@ -490,6 +481,15 @@ class DocxCompiler(Compiler):
         run = self.current_paragraph.add_run(f" {ast['number']}")
         run.font.superscript = True
         run.font.bold = True
+
+    def render_footnote_def_setup(self, ast):
+        "Setup the footnote rendering; output number."
+        self.current_paragraph = self.doc.add_paragraph()
+        self.current_paragraph.paragraph_format.left_indent = docx.shared.Pt(15)
+        self.current_paragraph.paragraph_format.first_line_indent = docx.shared.Pt(-15)
+        run = self.current_paragraph.add_run(f"{ast['number']}.")
+        run.font.bold = True
+        self.current_paragraph.add_run(" ")
 
     def render_reference(self, ast):
         run = self.current_paragraph.add_run(ast["name"])

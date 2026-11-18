@@ -2,7 +2,7 @@
 
 import re
 
-VERSION = (0, 8, 5)
+VERSION = (0, 8, 6)
 __version__ = ".".join([str(n) for n in VERSION])
 
 FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)

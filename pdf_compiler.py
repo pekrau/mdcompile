@@ -193,11 +193,6 @@ class PdfCompiler(Compiler):
         self.flowables.append(Paragraph(title, style=self.stylesheet["Heading1"]))
         self.write_footnotes(self.text)
 
-    # def write_footnote(self, text, footnote):
-    #     "Write the footnote."
-    #     for child in footnote["children"]:
-    #         self.render(child)
-
     def write_references(self):
         "Write the references section, if any references."
         if not self.referenced:
@@ -334,6 +329,7 @@ class PdfCompiler(Compiler):
     def render_document(self, ast):
         self.within_quote = False
         self.within_code = False
+        self.within_footnote = False
         self.stack = []
         self.list_stack = []
         for child in ast["children"]:
@@ -383,31 +379,29 @@ class PdfCompiler(Compiler):
         self.pop()
 
     def render_paragraph(self, ast):
-        self.push()
+        # NOTE: this flag may have value -1, denoting continued definition.
+        if self.within_footnote == False: # If footnote started, then paragraph created.
+            self.push()
+
+        # Prepend paragraph number.
         if self.paragraph_number is not None:
             self.paragraph_number += 1
             self.append('<font face="courier">')
             self.append(f"({self.paragraph_number})")
             self.append("</font> ")
+            
         for child in ast["children"]:
             self.render(child)
+
+        # Set the style of the paragraph.
         if self.within_quote:
             self.pop(stylename="Quote")
         elif self.within_code:
             self.pop(stylename="Code", preformatted=True)
-        elif self.footnote_def_flag is not None:
-            # Starting footnote definition.
-            if self.footnote_def_flag > 0:
-                self.stack[-1][0].insert(
-                    0, f"<strong>{self.footnote_def_flag}.</strong> "
-                )
-                self.stack[-1][0].insert(
-                    0, f'<a name="{self.footnote_text.identifier}-footnote-{self.footnote_def_flag}"/>')
-                # Signal for being within footnote definition.
-                self.footnote_def_flag = -1
+        elif self.within_footnote:
+            if self.within_footnote > 0: # Starting footnote definition.
                 self.pop(stylename="Footnote")
-            # Continuing footnote definition.
-            else:
+            else: # Continuing footnote definition.
                 self.pop(stylename="Footnote subsequent")
         else:
             self.pop()
@@ -514,7 +508,14 @@ class PdfCompiler(Compiler):
         self.append(f'<a href="#index-{utils.safe(ast["canonical"])}" underline="1" color="darkgreen">{ast["term"]}</a>')
 
     def render_footnote_ref(self, ast):
-        self.append(f'<sup><strong><a href="#{ast["identifier"]}" underline="1" color="darkgreen">{ast["number"]}</a></strong></sup>')
+        self.append(f'<sup><strong><a name="{ast["identifier"]}-ref"/><a href="#{ast["identifier"]}" underline="1" color="darkgreen">{ast["number"]}</a></strong></sup>')
+
+    def render_footnote_def_setup(self, ast):
+        "Setup the footnote rendering; output number."
+        self.push()
+        self.append(f'<a name="{ast["identifier"]}"/>')
+        self.append(f'<a href="#{ast["identifier"]}-ref" underline="1" color="darkgreen"><strong>{ast["number"]}.</strong></a> ')
+        self.within_footnote = -1
 
     def render_reference(self, ast):
         self.append(f'<em><a href="#{ast["name"]}" underline="1" color="darkgreen">{ast["name"]}</a></em>')

@@ -36,6 +36,9 @@ mark {
 p.codeblock {
   font-family: 'Courier New', monospace;
   margin-left: 3em;
+}
+a.internal {
+  color: darkgreen;
 }""")
         for author in self.text.authors:
             self.book.creators.append(author)
@@ -126,14 +129,6 @@ p.codeblock {
         self.current_section = epub3.Section(self.tx("Footnotes"))
         self.text.section.add_section(self.current_section)
         self.write_footnotes(self.text)
-
-    def write_footnote(self, text, footnote):
-        "Write the definition for the footnote."
-        self.push()
-        self.append(f'<a id="{footnote["identifier"]}"/>')
-        for child in footnote["children"]:
-            self.render(child)
-        self.pop()
 
     def write_references(self):
         "Write the references section, if any references."
@@ -255,6 +250,7 @@ p.codeblock {
 
     def render_document(self, ast):
         "Render the contents of the text."
+        self.within_footnote = False
         self.push()
         for child in ast["children"]:
             self.render(child)
@@ -271,15 +267,10 @@ p.codeblock {
         self.pop()
 
     def render_paragraph(self, ast):
-        self.push()
-        self.append("<p>")
-        if self.footnote_def_flag is not None:
-            # Starting footnote definitions.
-            if self.footnote_def_flag > 0:
-                # XXX Link to footnote definition.
-                self.append(f"<strong>{self.footnote_def_flag}.</strong> ")
-                # Signal for being within footnote definition.
-                self.footnote_def_flag = -1
+        # NOTE: this flag may have value -1, denoting continued definition.
+        if self.within_footnote == False: # If footnote started, then paragraph created.
+            self.push()
+            self.append("<p>")
         if self.paragraph_number is not None:
             self.paragraph_number += 1
             self.append(f"<mark>({self.paragraph_number})</mark> ")
@@ -365,7 +356,7 @@ p.codeblock {
         self.append(f'<a href="{ast["dest"]}">')
         for child in ast["children"]:
             self.render(child)
-        self.append("↗</a>")
+        self.append("</a>")
         self.pop()
 
     def render_list(self, ast):
@@ -394,15 +385,28 @@ p.codeblock {
         self.append("<a ")
         # Disallow multiple indexing of the same term in a text.
         if not ast.get("multiple"):
-            self.append(f'id="{utils.safe(ast["canonical"])}" ')
-        self.append(f'href="{self.tx("Index")}.xhtml#{utils.safe(ast["canonical"])}">{escape(ast["term"])}</a>')
+            id = f"{utils.safe(ast['canonical'])}"
+            self.append(f'id="{id}" ')
+        href = f"{self.tx('Index')}.xhtml#{utils.safe(ast['canonical'])}"
+        self.append(f'href="{href}" class="internal">{escape(ast["term"])}</a>')
 
     def render_footnote_ref(self, ast):
-        self.append(f'<sup>{ast["number"]}</sup>')
+        href = f"{ast['text'].identifier}-footnotes.xhtml#{ast['identifier']}"
+        ic(ast["text"], href)
+        self.append(f'<sup><a href="{href}">{ast["number"]}</a></sup>')
+
+    def render_footnote_def_setup(self, ast):
+        "Setup the footnote rendering; output number."
+        self.push()
+        self.append("<p>")
+        id = f"{ast['identifier']}"
+        ic(ast["text"], id)
+        self.append(f'<a id="{id}"/><strong>{ast["number"]}.</strong> ')
+        self.within_footnote = -1
 
     def render_reference(self, ast):
         self.push()
-        self.append(f'<a href="{self.tx("References")}.xhtml#{utils.safe(ast["name"])}">{escape(ast["name"])}</a>')
+        self.append(f'<a href="{self.tx("References")}.xhtml#{utils.safe(ast["name"])}" class="internal">{escape(ast["name"])}</a>')
         if self.reference_title:
             self.append(": ")
             reference = self.referenced[ast["name"]]

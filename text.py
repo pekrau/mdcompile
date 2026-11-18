@@ -9,7 +9,7 @@ import constants
 import utils
 
 
-def read_texts(directory, text_filename, supertext=None, ordinal=None):
+def read_texts(directory, supertext=None, ordinal=None):
     """Read the Markdown file(s) in the given directory,
     and recursively in any subdirectories.
     """

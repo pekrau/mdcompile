@@ -50,7 +50,16 @@ class Compiler:
         self.tx = Tx(self.text.language)
 
         # References library
-        self.library = library.Library(self.text.frontmatter.get("library"))
+        path = self.text.frontmatter.get("library")
+        if not path:
+            try:
+                path = pathlib.Path(os.environ["LIBRARY_DIR"])
+            except KeyError:
+                path = None
+        if path:
+            self.library = library.Library(path)
+        else:
+            self.library = {}
 
         # Collect references in the text(s). Error if any missing.
         self.referenced = {}
@@ -89,10 +98,11 @@ class Compiler:
                         if element["element"] == "footnote_ref":
                             element["number"] = str(number := number + 1)
                             identifier = f"{text.identifier}-footnote-{number}"
+                            element["text"] = text
                             element["identifier"] = identifier
-                            footnote_def = text.footnotes[element["label"]]
-                            footnote_def["number"] = number
-                            footnote_def["identifier"] = identifier
+                            footnote = text.footnotes[element["label"]]
+                            footnote["number"] = number
+                            footnote["identifier"] = identifier
             case constants.FOOTNOTES_CHAPTER:
                 for chapter in self.text.subtexts:
                     number = 0
@@ -101,10 +111,11 @@ class Compiler:
                             if element["element"] == "footnote_ref":
                                 element["number"] = str(number := number + 1)
                                 identifier = f"{chapter.identifier}-footnote-{number}"
+                                element["text"] = chapter
                                 element["identifier"] = identifier
-                                footnote_def = text.footnotes[element["label"]]
-                                footnote_def["number"] = number
-                                footnote_def["identifier"] = identifier
+                                footnote = text.footnotes[element["label"]]
+                                footnote["number"] = number
+                                footnote["identifier"] = identifier
                         if text is not chapter:
                             labels = set(chapter.footnotes.keys()).intersection(
                                 text.footnotes.keys()
@@ -122,10 +133,11 @@ class Compiler:
                         if element["element"] == "footnote_ref":
                             element["number"] = str(number := number + 1)
                             identifier = f"{self.text.identifier}-footnote-{number}"
+                            element["text"] = self.text
                             element["identifier"] = identifier
-                            footnote_def = text.footnotes[element["label"]]
-                            footnote_def["number"] = number
-                            footnote_def["identifier"] = identifier
+                            footnote = text.footnotes[element["label"]]
+                            footnote["number"] = number
+                            footnote["identifier"] = identifier
                     if text is not self.text:
                         labels = set(self.text.footnotes.keys()).intersection(
                             text.footnotes.keys()
@@ -209,15 +221,8 @@ class Compiler:
     def write_footnotes(self, text):
         "Write the footnotes in the given text."
         for footnote in sorted(text.footnotes.values(), key=lambda f: f["number"]):
-            self.footnote_text = text
-            self.footnote_def_flag = footnote["number"]
-            self.write_footnote(text, footnote)
-            self.footnote_def_flag = None
-
-    def write_footnote(self, text, footnote):
-        "Write the footnote."
-        for child in footnote["children"]:
-            self.render(child)
+            footnote["text"] = text
+            self.render(footnote)
 
     def write_references(self):
         "Write the references section, if any references."
@@ -236,8 +241,6 @@ class Compiler:
         """
         if level is not None:
             self.level = level
-            # None: not in footnote; -1: footnote started; >= 1: footnote number to start
-            self.footnote_def_flag = None
         try:
             method = getattr(self, f"render_{ast['element']}")
         except AttributeError:
@@ -333,8 +336,19 @@ class Compiler:
         raise NotImplementedError
 
     def render_footnote_def(self, ast):
-        "Footnote definition handled separately; this element is to be ignored."
-        pass
+        "Render a footnote definition."
+        if not "number" in ast: # Skip on first pass, within text.
+            return
+        self.render_footnote_def_setup(ast)
+        self.within_footnote = +1
+        self.footnote_text = ast["text"]
+        for child in ast["children"]:
+            self.render(child)
+        self.within_footnote = False
+
+    def render_footnote_def_setup(self, ast):
+        "Setup the footnote rendering; output number."
+        raise NotImplementedError
 
     def render_reference(self, ast):
         "Render a reference."

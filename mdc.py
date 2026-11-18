@@ -35,21 +35,21 @@ class Timer:
     "--input_path",
     "-i",
     type=click.Path(exists=True, resolve_path=True, path_type=pathlib.Path),
-    default=f"./{constants.TEXT_FILENAME}",
-    help=f"Input Markdown file or directory. All '*.md' files in the sibling directories are included. Default './{constants.TEXT_FILENAME}'.",
+    default=f"{constants.TEXT_FILENAME}",
+    help=f"Markdown file or directory to compile. Default '{constants.TEXT_FILENAME}'.",
 )
 @click.option(
     "--output_filepath",
     "-o",
     type=click.Path(exists=False, path_type=pathlib.Path),
-    default=f"./{constants.OUTPUT_FILENAME}",
-    help=f"Output file. The extension depends on the output format. Default '{constants.OUTPUT_FILENAME}'.",
+    default=f"{constants.OUTPUT_FILENAME}",
+    help=f"Output file name. The extension depends on the output format. Default '{constants.OUTPUT_FILENAME}'.",
 )
 @click.option(
     "--readme",
     "-r",
     is_flag=True,
-    help=f"Write out a '{constants.README_FILENAME}' file.",
+    help=f"Write out a '{constants.README_FILENAME}' file for the compiled file(s).",
 )
 @optgroup.group(
     "Output formats",
@@ -65,19 +65,12 @@ def main(input_path, output_filepath, readme, docx, pdf, epub3):
     click.echo(f"mdc {constants.__version__}")
 
     if input_path.is_dir():
-        directory = input_path
-        text_filename = constants.TEXT_FILENAME
+        text = read_texts(input_path)
     else:
-        directory = input_path.parent
-        text_filename = input_path.name
-
-    try:
-        text = read_texts(directory, text_filename)
-    except FileNotFoundError as error:
-        raise click.UsageError(str(error))
+        text = Text(input_path)
 
     if not output_filepath.is_absolute():
-        output_filepath = directory / output_filepath
+        output_filepath = text.filepath.parent / output_filepath
     try:
         if pdf:
             compiler = PdfCompiler(text)
@@ -93,9 +86,10 @@ def main(input_path, output_filepath, readme, docx, pdf, epub3):
 
     click.echo(f"{len(text)} Markdown files read.")
     click.echo(f"Footnotes at end of {compiler.footnotes_location}.")
-    click.echo(
-        f"{len(compiler.referenced)} references from library '{compiler.library}'."
-    )
+    if compiler.library:
+        click.echo(
+            f"{len(compiler.referenced)} references from library '{compiler.library}'."
+        )
     click.echo(f"{len(compiler.indexed)} terms indexed.")
 
     compiler.write(output_filepath)
@@ -104,7 +98,7 @@ def main(input_path, output_filepath, readme, docx, pdf, epub3):
     click.echo(f"Wrote '{output_filepath}'.")
 
     if readme:
-        output_filepath = directory / constants.README_FILENAME
+        output_filepath = output_filepath.parent / constants.README_FILENAME
         with open(output_filepath, "w") as outfile:
             outfile.write(compiler.text.title + "\n")
             outfile.write("=" * len(compiler.text.title) + "\n\n")
