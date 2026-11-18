@@ -5,7 +5,7 @@ import pathlib
 from xml.sax.saxutils import escape
 
 import constants
-import miniepub3 as epub3
+import epub3_writer as epub3
 import utils
 from compiler import Compiler
 
@@ -16,8 +16,27 @@ class Epub3Compiler(Compiler):
     def write_setup(self):
         "Set up the EPUB3 document."
         self.book = epub3.Book(
-            self.text.identifier, self.text.title, self.text.language
+            self.text.title, self.text.identifier, self.text.language
         )
+        self.book.add_style("standard",
+"""body {
+  font-family: Helvetica, Arial, Verdana, sans-serif;
+  background-color: white;
+}
+blockquote {
+  font-family: Garamond, 'Times New Roman', serif;
+  margin: 2em;
+  padding-left: 1em;
+  border-left: 0.5em solid lightgray;
+}
+mark {
+  font-family: 'Courier New', monospace;
+  background-color: white;
+}
+p.codeblock {
+  font-family: 'Courier New', monospace;
+  margin-left: 3em;
+}""")
         for author in self.text.authors:
             self.book.creators.append(author)
         self.book.contributor = f"mdcompile {constants.__version__}"
@@ -58,7 +77,7 @@ class Epub3Compiler(Compiler):
     def write_title_page(self):
         "Write the title page. If no subtexts, this is all content except references."
         title = self.tx("Title page") if self.text.subtexts else self.text.title
-        self.current_section = epub3.Section("title_page", title)
+        self.current_section = epub3.Section(title, add_title=False)
         self.book.add_section(self.current_section)
         self.push()
         self.append(f"<h1>{escape(self.text.title)}</h1>")
@@ -81,8 +100,7 @@ class Epub3Compiler(Compiler):
     def write_text_setup(self, text):
         "Set up for the next text. Output the text title. Record section for TOC."
         title = text.ordinal_title
-        self.current_section = text.section = epub3.Section(text.identifier, title)
-        self.write_heading(text.ordinal_title, text.level)
+        self.current_section = text.section = epub3.Section(title, add_title=text.level, name=text.identifier)
         if text.supertext is self.text:  # First-level subtext; chapter.
             self.book.add_section(self.current_section)
         else:
@@ -94,12 +112,10 @@ class Epub3Compiler(Compiler):
             return
         if not self.footnotes_location == constants.FOOTNOTES_CHAPTER:
             return
-        title = self.tx("Footnotes")
-        self.current_section = epub3.Section(f"footnotes_{text.identifier}", title)
+        self.current_section = epub3.Section(self.tx("Footnotes"), add_title=2, name=f"{text.identifier}-footnotes")
         sections = list(self.book.sections.values())
         sections[-1].add_section(self.current_section)
-        self.write_heading(title, 2)
-        self.write_footnotes_items(text)
+        self.write_footnotes(text)
 
     def write_footnotes_book(self):
         "Write out footnotes for the book, if that mode, and any footnotes."
@@ -107,32 +123,37 @@ class Epub3Compiler(Compiler):
             return
         if not self.footnotes_location == constants.FOOTNOTES_BOOK:
             return
-        title = self.tx("Footnotes")
-        self.current_section = epub3.Section("footnotes", title)
+        self.current_section = epub3.Section(self.tx("Footnotes"))
         self.text.section.add_section(self.current_section)
-        self.write_heading(title, 1)
-        self.write_footnotes_items(self.text)
+        self.write_footnotes(self.text)
+
+    def write_footnote(self, text, footnote):
+        "Write the footnote in the given text."
+        self.push()
+        self.append(f'<a name="{text.identifier}-footnote-{footnote["number"]}"/>')
+        for child in footnote["children"]:
+            self.render(child)
+        self.pop()
 
     def write_references(self):
         "Write the references section, if any references."
         if self.referenced:
-            self.push()
             title = self.tx("References")
             if self.text.subtexts:  # Book; references in a separate section.
-                self.current_section = epub3.Section("references", title)
+                self.current_section = epub3.Section(title)
                 self.book.add_section(self.current_section)
-                self.append(f"<h1>{title}</h1>")
             else:  # Essay; references after the text; no new section.
                 self.references_section = None
+                self.push()
                 self.append(f"<h3>{title}</h3>")
-            self.pop()
+                self.pop()
         else:
             self.references_section = None
             return
         for name, reference in sorted(self.referenced.items()):
             self.push()
             self.append("<p>")
-            self.append(f'<a id="{utils.normalize(name)}"/>')
+            self.append(f'<a id="{utils.safe(name)}"/>')
             # Authors.
             count = len(reference["authors"])
             for pos, author in enumerate(reference["authors"]):
@@ -211,19 +232,20 @@ class Epub3Compiler(Compiler):
         "Write the index section, if any indexed terms. Only for book."
         if not self.indexed:
             return
-        title = self.tx("Index")
-        self.current_section = epub3.Section("index", title)
+        self.current_section = epub3.Section(self.tx("Index"))
         self.book.add_section(self.current_section)
         self.push()
-        self.append(f"<h1>{title}</h1>")
         items = sorted(self.indexed.items(), key=lambda i: i[0].casefold())
         for canonical, texts in items:
             self.push()
             self.append("<dl>")
-            self.append(f'<dt><a id="{utils.normalize(escape(canonical))}"/>{escape(canonical)}</dt>')
+            self.append(f'<dt><a id="{utils.safe(canonical)}"/>{escape(canonical)}</dt>')
+            self.append("<dd>")
             for text in texts:
-                self.append(f'<dd><a href="{text.identifier}.xhtml">{escape(text.ordinal_title)}</a></dd>')
-            self.append("</dl>")
+                self.append(f'<a href="{text.identifier}.xhtml#{utils.safe(canonical)}">{escape(text.ordinal_title)}</a>')
+                if text is not texts[-1]:
+                    self.append("<br/>")
+            self.append("</dd></dl>")
             self.pop()
         self.pop()
 
@@ -369,14 +391,18 @@ class Epub3Compiler(Compiler):
         self.pop()
 
     def render_indexed(self, ast):
-        self.append(f'<em><a href="index.xhtml#{utils.normalize(ast["canonical"])}">{escape(ast["term"])}</a></em>')
+        self.append("<a ")
+        # Disallow multiple indexing of the same term in a text.
+        if not ast.get("multiple"):
+            self.append(f'id="{utils.safe(ast["canonical"])}" ')
+        self.append(f'href="{self.tx("Index")}.xhtml#{utils.safe(ast["canonical"])}">{escape(ast["term"])}</a>')
 
     def render_footnote_ref(self, ast):
-        self.append(f'<sup><strong>{ast["number"]}</strong></sup>')
+        self.append(f'<sup>{ast["number"]}</sup>')
 
     def render_reference(self, ast):
         self.push()
-        self.append(f'<a href="references.xhtml#{utils.normalize(ast["name"])}">{escape(ast["name"])}</a>')
+        self.append(f'<a href="{self.tx("References")}.xhtml#{utils.safe(ast["name"])}">{escape(ast["name"])}</a>')
         if self.reference_title:
             self.append(": ")
             reference = self.referenced[ast["name"]]

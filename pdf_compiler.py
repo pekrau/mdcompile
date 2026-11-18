@@ -5,12 +5,11 @@ import io
 
 import reportlab
 import reportlab.rl_config
-import reportlab.lib.colors
 from reportlab.lib.styles import *
 from reportlab.platypus import *
 from reportlab.platypus.doctemplate import LayoutError
 from reportlab.platypus.tables import *
-from reportlab.platypus.tableofcontents import TableOfContents, SimpleIndex
+from reportlab.platypus.tableofcontents import TableOfContents
 
 import constants
 import utils
@@ -53,7 +52,9 @@ class PdfCompiler(Compiler):
             ParagraphStyle(
                 name="Index",
                 parent=self.stylesheet["Normal"],
-                leading=12,  # Cannot set to 0: the clickable area in index page lost.
+                spaceBefore=6,
+                leftIndent=10,
+                firstLineIndent=-10,
             )
         )
         self.stylesheet.add(
@@ -119,7 +120,7 @@ class PdfCompiler(Compiler):
             Paragraph(self.text.title, style=self.stylesheet["Title"])
         )
         self.flowables.append(
-            HRFlowable(width="100%", color=reportlab.lib.colors.black, spaceAfter=20)
+            HRFlowable(width="100%", color="black", spaceAfter=20)
         )
         if self.text.subtitle:
             self.write_heading(self.text.subtitle, 1)
@@ -176,9 +177,9 @@ class PdfCompiler(Compiler):
             return
         self.flowables.append(NotAtTopPageBreak())
         title = self.tx("Footnotes")
-        self.flowables.append(TocMarker(1, title, f"__footnotes_{text.identifier}__"))
+        self.flowables.append(TocMarker(1, title, f"footnotes_{text.identifier}"))
         self.flowables.append(Paragraph(title, style=self.stylesheet["Heading1"]))
-        self.write_footnotes_items(text)
+        self.write_footnotes(text)
 
     def write_footnotes_book(self):
         "Write out footnotes for the book, if that mode, and any footnotes."
@@ -188,9 +189,14 @@ class PdfCompiler(Compiler):
             return
         self.flowables.append(NotAtTopPageBreak())
         title = self.tx("Footnotes")
-        self.flowables.append(TocMarker(0, title, "__footnotes__"))
+        self.flowables.append(TocMarker(0, title, "footnotes"))
         self.flowables.append(Paragraph(title, style=self.stylesheet["Heading1"]))
-        self.write_footnotes_items(self.text)
+        self.write_footnotes(self.text)
+
+    def write_footnote(self, text, footnote):
+        "Write the footnote in the given text."
+        for child in footnote["children"]:
+            self.render(child)
 
     def write_references(self):
         "Write the references section, if any references."
@@ -199,7 +205,7 @@ class PdfCompiler(Compiler):
         title = self.tx("References")
         if self.text.subtexts:  # Book; references in separate section.
             self.flowables.append(NotAtTopPageBreak())
-            self.flowables.append(TocMarker(0, title, "__references__"))
+            self.flowables.append(TocMarker(0, title, "references"))
             self.flowables.append(Paragraph(title, style=self.stylesheet["Heading1"]))
         else:  # Essay; references after the text; no page break, no TOC.
             self.flowables.append(Paragraph(title, style=self.stylesheet["Heading3"]))
@@ -229,9 +235,7 @@ class PdfCompiler(Compiler):
             self.append(".")
             # External link.
             if url := reference.get("url"):
-                self.append(
-                    f' <link href="{url}" underline="true" color="royalblue">{url}</link>'
-                )
+                self.append(f' <a href="{url}" underline="1" color="blue">{url}</a>')
             # Cross-references to other databases.
             for key, (label, template) in constants.EXTERNAL_LINKS.items():
                 try:
@@ -239,7 +243,7 @@ class PdfCompiler(Compiler):
                     text = f"{label}:{value}"
                     url = template.format(value=value)
                     self.append(
-                        f' <link href="{url}" underline="true" color="royalblue">{text}</link>'
+                        f' <a href="{url}" underline="1" color="blue">{text}</a>'
                     )
                 except KeyError:
                     pass
@@ -278,7 +282,7 @@ class PdfCompiler(Compiler):
             self.append(f" {self.tx('published')} {published}")
         if href := reference.get("href"):
             self.append(
-                f' <link href="{href}" underline="true" color="royalblue">{href}</link>'
+                f' <a href="{href}" underline="1" color="blue">{href}</a>'
             )
             if accessed := reference.get("accessed"):
                 self.append(f" ({self.tx('accessed')} {accessed})")
@@ -289,10 +293,16 @@ class PdfCompiler(Compiler):
             return
         title = self.tx("Index")
         self.flowables.append(NotAtTopPageBreak())
-        self.flowables.append(TocMarker(0, title, "__index__"))
+        self.flowables.append(TocMarker(0, title, "index"))
         self.flowables.append(Paragraph(title, style=self.stylesheet["Heading1"]))
-        self.simple_index = SimpleIndex(style=self.stylesheet["Index"], headers=False)
-        self.flowables.append(self.simple_index)
+
+        items = sorted(self.indexed.items(), key=lambda i: i[0].casefold())
+        for canonical, texts in items:
+            self.push("Index")
+            self.append(f'<a name="index-{utils.safe(canonical)}"/>{canonical}')
+            for text in texts:
+                self.append(f'<br/>{text.ordinal_title}')
+            self.pop()
 
     def write_to_file(self, output_filepath):
         "Write the PDF contents to file."
@@ -308,26 +318,10 @@ class PdfCompiler(Compiler):
                 props["subject"] = self.text.subtitle
             if self.toc:
                 document = TocDocTemplate(outfile, toc_level=self.text.depth, **props)
-                if self.indexed:
-                    document.multiBuild(
-                        self.flowables,
-                        onLaterPages=self.write_page_number,
-                        canvasmaker=self.simple_index.getCanvasMaker(),
-                    )
-                else:
-                    document.multiBuild(
-                        self.flowables, onLaterPages=self.write_page_number
-                    )
+                document.multiBuild(self.flowables, onLaterPages=self.write_page_number)
             else:
                 document = SimpleDocTemplate(outfile, **props)
-                if self.indexed:
-                    document.build(
-                        self.flowables,
-                        onLaterPages=self.write_page_number,
-                        canvasmaker=self.simple_index.getCanvasMaker(),
-                    )
-                else:
-                    document.build(self.flowables, onLaterPages=self.write_page_number)
+                document.build(self.flowables, onLaterPages=self.write_page_number)
 
     def write_page_number(self, canvas, doc):
         "Write page number onto the current canvas."
@@ -407,6 +401,8 @@ class PdfCompiler(Compiler):
                 self.stack[-1][0].insert(
                     0, f"<strong>{self.footnote_def_flag}.</strong> "
                 )
+                self.stack[-1][0].insert(
+                    0, f'<a name="{self.footnote_text.identifier}-footnote-{self.footnote_def_flag}"/>')
                 # Signal for being within footnote definition.
                 self.footnote_def_flag = -1
                 self.pop(stylename="Footnote")
@@ -480,17 +476,17 @@ class PdfCompiler(Compiler):
         self.flowables.append(
             HRFlowable(
                 width="60%",
-                color=reportlab.lib.colors.black,
+                color="black",
                 spaceBefore=15,
                 spaceAfter=20,
             )
         )
 
     def render_link(self, ast):
-        self.append(f'<link href="{ast["dest"]}" underline="true" color="blue">')
+        self.append(f'<a href="{ast["dest"]}" underline="1" color="blue">')
         for child in ast["children"]:
             self.render(child)
-        self.append("</link>")
+        self.append("</a>")
 
     def render_list(self, ast):
         self.list_stack.append([])
@@ -515,15 +511,13 @@ class PdfCompiler(Compiler):
         self.list_stack[-1].append(item)
 
     def render_indexed(self, ast):
-        # XXX Link to item in Index section.
-        item = ast["canonical"].replace(",", ",,").replace(";", ",")
-        self.append(f'<index item="{item}"/><u>{ast["term"]}</u>')
+        self.append(f'<a href="#index-{utils.safe(ast["canonical"])}" underline="1" color="darkgreen">{ast["term"]}</a>')
 
     def render_footnote_ref(self, ast):
-        self.append(f" <sup><strong>{ast['number']}</strong></sup>")
+        self.append(f'<sup><strong><a href="#{ast["identifier"]}" underline="1" color="darkgreen">{ast["number"]}</a></strong></sup>')
 
     def render_reference(self, ast):
-        self.append(f'<em><link href="#{ast["name"]}">{ast["name"]}</link></em>')
+        self.append(f'<em><a href="#{ast["name"]}" underline="1" color="darkgreen">{ast["name"]}</a></em>')
         if self.reference_title:
             self.append(f': <em>{self.referenced[ast["name"]]["title"]}</em>')
 

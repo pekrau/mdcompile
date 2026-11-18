@@ -73,7 +73,12 @@ class Compiler:
         for text in self.text:
             for element in text.elements():
                 if element["element"] == "indexed":
-                    self.indexed.setdefault(element["canonical"], []).append(text)
+                    texts = self.indexed.setdefault(element["canonical"], [])
+                    # Disallow multiple indexing of the same term in a text.
+                    if text in texts:
+                        element["multiple"] = True
+                    else:
+                        texts.append(text)
 
         # Transfer footnotes to the appropriate texts, and number them.
         match self.footnotes_location:
@@ -83,7 +88,11 @@ class Compiler:
                     for element in text.elements():
                         if element["element"] == "footnote_ref":
                             element["number"] = str(number := number + 1)
-                            text.footnotes[element["label"]]["number"] = number
+                            identifier = f"{text.identifier}-footnote-{number}"
+                            element["identifier"] = identifier
+                            footnote_def = text.footnotes[element["label"]]
+                            footnote_def["number"] = number
+                            footnote_def["identifier"] = identifier
             case constants.FOOTNOTES_CHAPTER:
                 for chapter in self.text.subtexts:
                     number = 0
@@ -91,7 +100,11 @@ class Compiler:
                         for element in text.elements():
                             if element["element"] == "footnote_ref":
                                 element["number"] = str(number := number + 1)
-                                text.footnotes[element["label"]]["number"] = number
+                                identifier = f"{chapter.identifier}-footnote-{number}"
+                                element["identifier"] = identifier
+                                footnote_def = text.footnotes[element["label"]]
+                                footnote_def["number"] = number
+                                footnote_def["identifier"] = identifier
                         if text is not chapter:
                             labels = set(chapter.footnotes.keys()).intersection(
                                 text.footnotes.keys()
@@ -108,7 +121,11 @@ class Compiler:
                     for element in text.elements():
                         if element["element"] == "footnote_ref":
                             element["number"] = str(number := number + 1)
-                            text.footnotes[element["label"]]["number"] = number
+                            identifier = f"{self.text.identifier}-footnote-{number}"
+                            element["identifier"] = identifier
+                            footnote_def = text.footnotes[element["label"]]
+                            footnote_def["number"] = number
+                            footnote_def["identifier"] = identifier
                     if text is not self.text:
                         labels = set(self.text.footnotes.keys()).intersection(
                             text.footnotes.keys()
@@ -179,7 +196,7 @@ class Compiler:
         self.write_heading(
             self.tx("Footnotes"), 4 if text is self.text else text.level + 3
         )
-        self.write_footnotes_items(text)
+        self.write_footnotes(text)
 
     def write_footnotes_chapter(self, text):
         "Write out footnotes for the chapter, if that mode and any footnotes."
@@ -189,13 +206,18 @@ class Compiler:
         "Write out footnotes for the book, if that mode, and any footnotes."
         raise NotImplemented
 
-    def write_footnotes_items(self, text):
+    def write_footnotes(self, text):
         "Write the footnotes in the given text."
         for footnote in sorted(text.footnotes.values(), key=lambda f: f["number"]):
+            self.footnote_text = text
             self.footnote_def_flag = footnote["number"]
-            for child in footnote["children"]:
-                self.render(child)
+            self.write_footnote(text, footnote)
             self.footnote_def_flag = None
+
+    def write_footnote(self, text, footnote):
+        "Write the footnote in the given text."
+        for child in footnote["children"]:
+            self.render(child)
 
     def write_references(self):
         "Write the references section, if any references."

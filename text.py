@@ -133,7 +133,7 @@ class Text:
             if self.supertext:
                 return f"text-{'-'.join([str(i) for i in self.ordinal])}"
             else:
-                return utils.normalize(self.title)
+                return utils.safe(self.title)
 
     @property
     def title(self):
@@ -177,6 +177,7 @@ class Text:
 
 
 class AstIterator:
+    "An iterator over the AST elements."
 
     def __init__(self, ast):
         self.ast = ast

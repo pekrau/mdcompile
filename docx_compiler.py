@@ -194,7 +194,7 @@ class DocxCompiler(Compiler):
         self.doc.add_page_break()
         paragraph = self.doc.add_paragraph(style="Title 3")
         paragraph.add_run(self.tx("Footnotes"))
-        self.write_footnotes_items(text)
+        self.write_footnotes(text)
 
     def write_footnotes_book(self):
         "Write out footnotes for the book, if that mode, and any footnotes."
@@ -205,7 +205,7 @@ class DocxCompiler(Compiler):
         self.doc.add_page_break()
         paragraph = self.doc.add_paragraph(style="Title 1")
         paragraph.add_run(self.tx("Footnotes"))
-        self.write_footnotes_items(self.text)
+        self.write_footnotes(self.text)
 
     def write_references(self):
         "Write the references section, if any references."

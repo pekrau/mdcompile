@@ -1,28 +1,23 @@
 "Constants."
 
 import re
-import string
 
-VERSION = (0, 8, 3)
+VERSION = (0, 8, 4)
 __version__ = ".".join([str(n) for n in VERSION])
 
 FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)
 
 EM_DASH = "\u2014"
 
-SAFE_CHARACTERS = set(string.ascii_letters + string.digits)
-
 DATETIME_ISOFORMAT = "%Y-%m-%d %H:%M"
 
 TEXT_FILENAME = "text.md"
-README_FILENAME = "README.md"
 OUTPUT_FILENAME = "manuscript"
-CSS_FILENAME = "pico.classless.min.css"
-CSS_URL = "https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.classless.min.css"
+README_FILENAME = "README.md"
+CSS_FILENAME = "pico.min.css"
+CSS_URL = "https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
 
 MAX_LEVEL = 6
-MAX_PAGE_BREAK_LEVEL = 4
-MAX_TOC_LEVEL = 4
 
 FOOTNOTES_BOOK = "book"
 FOOTNOTES_CHAPTER = "chapter"

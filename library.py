@@ -33,7 +33,7 @@ class Library:
 
     def __getitem__(self, name):
         "Return the reference as a dictionary, given the name 'Lastname year'."
-        filepath = self.dirpath / f"{utils.normalize(name)}.md"
+        filepath = self.dirpath / f"{utils.safe(name)}.md"
         if not filepath.exists():
             raise KeyError(f"no such reference: '{name}'")
         return split_file(filepath)[0]  # frontmatter only.

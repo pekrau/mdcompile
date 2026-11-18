@@ -1,28 +1,38 @@
-"""Minimalist module for generating a EPUB3 format file.
+"""Minimalist module for generating an EPUB3 format file.
+
 Based on the minimal EPUB3 example in https://github.com/thansen0/sample-epub-minimal
 
 TODO:
 - add image
 """
 
-__version__ = "0.8"
+__version__ = "0.5"
 
 __all__ = ["Book", "Section", "minixml", "__version__"]
 
 import datetime as dt
+import string
+import unicodedata
 import zipfile
 
 import minixml
 
+SAFE_CHARACTERS = set(string.ascii_letters + string.digits)  # Blank is not safe.
+
+
+def safe(s):
+    "Make string safe: convert to ASCII and replace non-safe characters with '-'."
+    s = unicodedata.normalize("NFKD", s).encode("ASCII", "ignore").decode("utf-8")
+    return "".join([c if c in SAFE_CHARACTERS else "-" for c in s])
+
 
 class Book:
-    "Book to write out as  EPUB3 format file."
+    "Book containing sections to write out as an EPUB3 format file."
 
-    def __init__(self, identifier, title, language="sv-SE", toc_stylename="default"):
-        self.identifier = identifier  # Dublin Core
+    def __init__(self, title, identifier, language="sv-SE", basic_style=False):
         self.title = title  # Dublin Core
+        self.identifier = identifier  # Dublin Core
         self.language = language  # Dublin Core
-        self.toc_stylename = toc_stylename  # CSS stylesheet for TOC, if any.
         self.creators = []  # Dublin Core for authors
         self.contributors = []  # Dublin core
         self.type = None  # Dublin Core
@@ -32,26 +42,73 @@ class Book:
         self.publisher = None  # Dublin Core
         self.rights = None  # Dublin Core
         self.date = None  # Dublin Core
+        self.styles = {}  # Key: name, value: CSS code.
+        if basic_style:
+            self.add_basic_style()
+        self.toc = True
+        self.toc_styles = True  # True: all styles used for TOC. Else list of style names.
         self.sections = {}  # Key: name, value: Section instance.
-        self.css = {}
-        self.add_css("default", DEFAULT_CSS)
 
-    def add_css(self, name, content):
-        "Add the CSS contents under the given name."
-        self.css[name] = content
+    def add_style(self, name, css_content):
+        "Add the named style CSS file."
+        assert isinstance(name, str)
+        assert name == safe(name)
+        assert isinstance(css_content, str)
+        self.styles[name] = css_content
+
+    def add_basic_style(self):
+        "Add a style CSS file named 'basic', for convenience."
+        self.add_style(
+            "basic",
+            """body {
+  font-family: sans-serif;
+  background-color: white;
+}
+blockquote {
+  font-family: serif;
+  margin: 2em;
+  padding-left: 1em;
+  border-left: 0.5em solid lightgray;
+}
+mark {
+  font-family: monospace;
+  background-color: white;
+}
+p.codeblock {
+  font-family: monospace;
+  margin-left: 3em;
+}""",
+        )
+
+    def add_toc_style(self, name):
+        "Use the explicit style for the TOC. Added to the current list, if any."
+        if name not in self.styles:
+            raise ValueError(f"style '{name}' not defined in book")
+        if isinstance(self.toc_styles, list):
+            self.toc_styles.append(name)
+        else:
+            self.toc_style = [name]
 
     def add_section(self, section):
-        """Add a Section instance having name, title, stylesheet name and XHTML content.
+        """Add a Section instance having name, title, styles and XHTML content.
         The order of addition is significant.
         """
         assert isinstance(section, Section)
-        assert section.stylename is None or section.stylename in self.css
-        assert section.content
-        assert isinstance(section.content, minixml.Element)
-        if section.name in self.sections:
-            raise ValueError(f"section name '{section.name}' is already in book")
+        assert section.book is None
+        section_names = set(section.get_all_names())
+        book_names = set(self.get_all_names())
+        names = ", ".join([f"'n'" for n in section_names.intersection(book_names)])
+        if names:
+            raise ValueError(f"section name(s) {names} already in book")
         self.sections[section.name] = section
         section.book = self
+
+    def get_all_names(self):
+        "Get all names for all sections and their subsections, recursively."
+        result = []
+        for section in self.sections.values():
+            result.extend(section.get_all_names())
+        return result
 
     def get_all_sections(self):
         "Get a list of all sections, including subsections."
@@ -108,10 +165,10 @@ class Book:
             dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         )
         manifest = root.create("manifest")
-        if self.toc_stylename:
+        if self.toc:
             item = manifest.create("item", id="toc", href="toc.xhtml", properties="nav")
             item["media-type"] = "application/xhtml+xml"
-        for name in self.css:
+        for name in self.styles:
             item = manifest.create("item", id=f"{name}_css", href=f"CSS/{name}.css")
             item["media-type"] = "text/css"
         for section in self.get_all_sections():
@@ -121,7 +178,7 @@ class Book:
             item["media-type"] = "application/xhtml+xml"
 
         spine = root.create("spine")
-        if self.toc_stylename:
+        if self.toc:
             spine.create("itemref", idref="toc")
         for section in self.get_all_sections():
             spine.create("itemref", idref=section.name)
@@ -129,18 +186,24 @@ class Book:
 
     def get_toc_xhtml(self):
         "Return the XHTML content for the TOC file."
-        assert self.toc_stylename
-        html = minixml.Element("html", xmlns="http://www.w3.org/1999/xhtml")
-        html["xmlns:epub"] = "http://www.idpf.org/2007/ops"
-        head = html.create("head")
+        assert self.toc
+        document = minixml.Element("html", xmlns="http://www.w3.org/1999/xhtml")
+        document["xmlns:epub"] = "http://www.idpf.org/2007/ops"
+        head = document.create("head")
         head.create("title").append("TOC")
-        head.create(
-            "link",
-            href=f"CSS/{self.toc_stylename}.css",
-            rel="stylesheet",
-            type="text/css",
-        )
-        nav = html.create("body").create("nav", id="toc")
+        if self.toc_styles is True:
+            styles = list(self.styles.keys())
+        elif isinstance(self.toc_styles, list):
+            styles = self.toc_styles
+        else:
+            styles = []
+        for style in styles:
+            if style not in self.styles:
+                raise ValueError(f"TOC style '{style}' is not present in book")
+            head.create(
+                "link", href=f"CSS/{style}.css", rel="stylesheet", type="text/css"
+            )
+        nav = document.create("body").create("nav", id="toc")
         nav["epub:type"] = "toc"
         h1 = nav.create("h1")
         h1["class"] = "frontmatter"
@@ -149,9 +212,9 @@ class Book:
         ol["class"] = "contents"
         for name, section in self.sections.items():
             li = ol.create("li")
-            li.create("a", href=f"{name}.xhtml").append(section.toc_title)
+            li.create("a", href=f"{name}.xhtml").append(section.title)
             section.append_sections_list(li)
-        return repr(html)
+        return repr(document)
 
     def write(self, outfile):
         "Write the EPUB3 file."
@@ -168,52 +231,70 @@ class Book:
             zip.writestr("META-INF/container.xml", self.get_container_xml())
             zip.writestr("OEBPS/", "")
             zip.writestr("OEBPS/CSS/", "")
-            for name, content in self.css.items():
+            for name, content in self.styles.items():
                 zip.writestr(f"OEBPS/CSS/{name}.css", content)
             zip.writestr("OEBPS/content.opf", self.get_content_opf())
-            if self.toc_stylename:
+            if self.toc:
                 zip.writestr("OEBPS/toc.xhtml", self.get_toc_xhtml())
             for section in self.get_all_sections():
-                zip.writestr(f"OEBPS/{section.name}.xhtml", str(section))
+                zip.writestr(f"OEBPS/{section.name}.xhtml", repr(section))
 
 
 class Section:
     "Section in Book; XHTML code container."
 
-    def __init__(self, name, toc_title=None, content=None, stylename="default"):
-        """The 'name' is used for the XHTML file in the EPUB3 book.
-        It must be unique in the book.
-        The 'toc_title' is used for the HTML HEAD element and for the TOC.
-        If None, then this section will not present in the TOC.
-        The 'toc_title' is *not* output to the beginning of the content BODY.
+    def __init__(self, title, add_title=1, name=None, content=None, styles=True):
+        """'title' must be unique in the book.
+        It is output as a 'title' element in 'html' 'head'.
+        If 'add_title' is non-zero, 'title' is output in an 'h' element as
+        the first element in the 'body' preceding any content.
+        If 'name' is provided, it must be safe.
+        If 'styles' is True, then use all styles defined for its book.
+        If 'styles' is a string, then use only those (comma-delimited).
         """
-        assert name
+        assert title
+        assert name is None or (name == safe(name))
         assert content is None or isinstance(content, (str, minixml.Element))
-        self.name = name
-        self.toc_title = toc_title
-        self.stylename = stylename
-        self.content = minixml.Element("html", xmlns="http://www.w3.org/1999/xhtml")
-        self.content["xmlns:epub"] = "http://www.idpf.org/2007/ops"
-        head = self.content.create("head")
-        head.create("title").append(toc_title)
-        if stylename:
-            head.create(
-                "link", href=f"CSS/{stylename}.css", rel="stylesheet", type="text/css"
-            )
-        self.body = self.content.create("body")
+        self.title = title
+        self.name = safe(name or title)
+        self.book = None
+        if isinstance(styles, str):
+            self.styles = [s for s in styles.split()]
+        else:
+            self.styles = styles
+        self.body = minixml.Element("body")
+        if add_title:
+            self.body.create(f"h{max(1, min(add_title, 6))}").append(self.title)
         if content:
             self.append(content)
         self.subsections = {}
 
-    def __str__(self):
-        "Return the XHTML code for the file."
-        return repr(self.content)
+    def __repr__(self):
+        "Return the XHTML file contents for this section."
+        document = minixml.Element("html", xmlns="http://www.w3.org/1999/xhtml")
+        document["xmlns:epub"] = "http://www.idpf.org/2007/ops"
+        head = document.create("head")
+        head.create("title").append(self.title)
+        styles = []
+        if self.styles is True:
+            if self.book:
+                styles = list(self.book.styles.keys())
+        elif isinstance(self.styles, list):
+            styles = self.styles
+        for style in styles:
+            if self.book and style not in self.book.styles:
+                raise ValueError(f"section style '{style}' is not present in book")
+            head.create(
+                "link", href=f"CSS/{style}.css", rel="stylesheet", type="text/css"
+            )
+        document.append(self.body)
+        return repr(document)
 
     def append(self, content):
         """The content is either an 'minixml.Element' instance or a string.
         If a string, then it will be parsed using 'minixml.parse'.
         The content must *not* contain the 'html', 'head' and 'body' elements; these
-        elements are automatically wrapped around the content, which must be valid XHTML.
+        elements are wrapped around the content, which must be valid XHTML.
         """
         if isinstance(content, str):
             for elem in list(minixml.parse(f"<tmp>{content}</tmp>").children):
@@ -224,11 +305,24 @@ class Section:
             raise ValueError(f"invalid content type: {type(content)}")
 
     def add_section(self, section):
-        "Add a named subsection. The order of addition is significant."
+        "Add a subsection. The order of addition is significant."
         assert isinstance(section, Section)
-        assert section.stylename is None or section.stylename in self.book.css
+        assert section.book is None
+        if self.book is None:
+            if section.name in self.get_all_names():
+                raise ValueError(f"section name '{section.name}' is already in section")
+        else:
+            if section.name in self.book.get_all_names():
+                raise ValueError(f"section name '{section.name}' is already in book")
         self.subsections[section.name] = section
         section.book = self.book
+
+    def get_all_names(self):
+        "Get all names for this section and its subsections, recursively."
+        result = [self.name]
+        for subsection in self.subsections.values():
+            result.extend(subsection.get_all_names())
+        return result
 
     def get_all_sections(self):
         "Get all subsections recursively as list of sections."
@@ -239,57 +333,61 @@ class Section:
         return result
 
     def append_sections_list(self, li):
-        """Append the subsections of this section to the TOC list item, recursively.
-        If the 'toc_title' of a subsection is None, it will not be added to the list.
-        """
-        subsections = [s for s in self.subsections.values() if s.toc_title]
+        "Append the subsections of this section to the TOC list item, recursively."
+        subsections = [s for s in self.subsections.values()]
         if not subsections:
             return
         ol = li.create("ol")
         for subsection in subsections:
             li = ol.create("li")
-            li.create("a", href=f"{subsection.name}.xhtml").append(subsection.toc_title)
+            li.create("a", href=f"{subsection.name}.xhtml").append(subsection.title)
             subsection.append_sections_list(li)
-
-
-DEFAULT_CSS = """body {
-  font-family: Helvetica, Arial, Verdana, sans-serif;
-  background-color: white;
-}
-blockquote {
-  font-family: Garamond, 'Times New Roman', serif;
-  margin: 2em;
-  padding-left: 1em;
-  border-left: 0.5em solid lightgray;
-}
-mark {
-  font-family: 'Courier New', monospace;
-  background-color: white;
-}
-p.codeblock {
-  font-family: 'Courier New', monospace;
-  margin-left: 3em;
-}
-"""
 
 
 if __name__ == "__main__":
     import pathlib
 
-    book = Book("abc123", "Test")
+    book = Book("Sample .epub Book", "isbn")
+    book.add_style(
+        "template",
+        """h1 {
+  text-align: right;
+}
+
+h1, h2, h3, h4, h5 {
+	color: #666;
+	font-family: sans-serif;
+	font-size: 2.2em;
+}
+
+p {
+	color: #444;
+	font-family: serif;
+	font-size: 1.3em;
+}
+
+a {
+	text-decoration: none;
+	color: #1EAEDB;
+}
+
+li {
+	list-style: upper-roman;
+	color: #444;
+	font-family: sans-serif;
+	font-size: 1.2em;
+	line-height: 1.4em;
+}""",
+    )
+    book.creators.append("Thomas Hansen")
     book.creators.append("Per Kraulis")
-    book.contributors.append(f"miniepub3 {__version__}")
-    book.type = "test"
-    book.source = "Python"
-    book.subject = "testing"
+    book.contributors.append(f"epub3_writer {__version__}")
     book.description = "Testing a few chapters, a subsection, and a TOC."
     book.add_section(
-        "chapter_1",
         Section(
             "Chapter 1",
-            content="""<h1>Chapter 1</h1>
-
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi id lectus dictum, lobortis urna a, luctus libero. Integer ultricies nisi nec nisi gravida, sit amet tempor diam posuere. Morbi consequat libero fringilla pellentesque venenatis. Donec ut porta metus. Etiam condimentum cursus elit pulvinar gravida. Nulla consequat interdum leo sed tincidunt. Suspendisse potenti. Integer pretium cursus libero, eu ornare erat dictum eu. Cras ultrices mi vel odio tempus fringilla. Nulla tristique nisi nisl, id scelerisque risus gravida a. Proin neque tellus, efficitur eu dictum hendrerit, lacinia vel neque. Proin augue risus, maximus ac eros consectetur, finibus mattis metus. Donec ut dictum diam. Vestibulum tempor orci id ultrices lacinia. Praesent bibendum, mi vitae euismod condimentum, eros enim tincidunt odio, id semper erat nisl vitae nisi. Nunc convallis mi sit amet velit venenatis vestibulum ac at mauris.</p>
+            styles="template",
+            content="""<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Morbi id lectus dictum, lobortis urna a, luctus libero. Integer ultricies nisi nec nisi gravida, sit amet tempor diam posuere. Morbi consequat libero fringilla pellentesque venenatis. Donec ut porta metus. Etiam condimentum cursus elit pulvinar gravida. Nulla consequat interdum leo sed tincidunt. Suspendisse potenti. Integer pretium cursus libero, eu ornare erat dictum eu. Cras ultrices mi vel odio tempus fringilla. Nulla tristique nisi nisl, id scelerisque risus gravida a. Proin neque tellus, efficitur eu dictum hendrerit, lacinia vel neque. Proin augue risus, maximus ac eros consectetur, finibus mattis metus. Donec ut dictum diam. Vestibulum tempor orci id ultrices lacinia. Praesent bibendum, mi vitae euismod condimentum, eros enim tincidunt odio, id semper erat nisl vitae nisi. Nunc convallis mi sit amet velit venenatis vestibulum ac at mauris.</p>
 
 	<p>Duis vestibulum elit non tortor luctus ultrices. Nulla facilisi. Aliquam rhoncus, est at elementum semper, tortor risus pretium diam, eget condimentum ipsum felis eget sapien. Nullam elit urna, lacinia a metus luctus, varius ultrices lectus. In pellentesque erat sit amet magna fringilla, in luctus lectus accumsan. Nulla tincidunt dignissim eleifend. Duis lacinia risus facilisis lacus tempor, et facilisis est ornare. Quisque vel sem congue, varius eros in, consequat purus. Nulla sodales id dui ut fermentum. Vestibulum sed justo sed sapien placerat congue. Nam in bibendum purus.</p>
 
@@ -300,13 +398,10 @@ if __name__ == "__main__":
 	<p>Nullam eros diam, hendrerit vel nibh in, malesuada aliquet massa. Nam blandit egestas massa, sit amet efficitur erat luctus vel. In eu leo at nibh egestas venenatis vel nec eros. Nulla bibendum sapien vel velit iaculis, in feugiat risus vestibulum. Suspendisse placerat laoreet eros, et ullamcorper est ornare eu. Praesent imperdiet lacus vel vehicula accumsan. Donec fringilla odio velit. Cras tempus est in lacus eleifend, cursus pellentesque lorem vehicula. Ut metus turpis, posuere eget imperdiet eget, bibendum in tortor. Mauris id dolor tellus. Suspendisse at nisi tellus. Duis lectus arcu, pulvinar et pretium in, tincidunt facilisis nulla. Nulla ullamcorper aliquam ullamcorper. Nunc ultricies nibh vitae urna hendrerit varius.</p>""",
         ),
     )
-    book.add_section(
-        "chapter_2",
-        Section(
-            "Chapter 2",
-            content="""<h1>Chapter 2</h1>
-
-    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas id ex urna. Quisque at fringilla ex. Aliquam erat volutpat. Nullam ac dignissim eros, sed iaculis dolor. Nullam sit amet libero convallis, porttitor nisl sed, pulvinar dolor. Vivamus ornare libero ipsum, eget interdum lorem viverra sed. Praesent sollicitudin viverra mauris ut gravida. Cras nec lorem id velit malesuada auctor. Pellentesque dignissim tortor vel tempus mattis. Integer sapien tortor, dignissim non purus eget, laoreet convallis dolor. Morbi vitae ante non tortor pharetra rutrum. Fusce pretium sapien nulla, sed pretium tortor ultrices sit amet.</p>
+    chapter2 = Section(
+        "Chapter 2",
+        styles="template",
+        content="""<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Maecenas id ex urna. Quisque at fringilla ex. Aliquam erat volutpat. Nullam ac dignissim eros, sed iaculis dolor. Nullam sit amet libero convallis, porttitor nisl sed, pulvinar dolor. Vivamus ornare libero ipsum, eget interdum lorem viverra sed. Praesent sollicitudin viverra mauris ut gravida. Cras nec lorem id velit malesuada auctor. Pellentesque dignissim tortor vel tempus mattis. Integer sapien tortor, dignissim non purus eget, laoreet convallis dolor. Morbi vitae ante non tortor pharetra rutrum. Fusce pretium sapien nulla, sed pretium tortor ultrices sit amet.</p>
 
 	<p>Morbi sed euismod est, ut sodales erat. In hac habitasse platea dictumst. Mauris ipsum diam, venenatis vitae turpis sit amet, blandit consectetur arcu. Aliquam non aliquet augue, in pharetra velit. Quisque dapibus bibendum lorem sed rutrum. Maecenas blandit sit amet lorem tempus viverra. Nulla commodo, orci sed eleifend efficitur, felis est dapibus felis, non mollis nibh tellus quis nunc. Curabitur vulputate velit orci. Duis laoreet erat augue. Maecenas nisi enim, congue vitae accumsan quis, tincidunt quis velit. Morbi vel leo ultricies, bibendum nibh at, posuere massa. Integer iaculis scelerisque elit.</p>
 
@@ -325,17 +420,24 @@ if __name__ == "__main__":
 	<p>Integer tincidunt facilisis dapibus. Integer viverra porta risus, a sagittis nulla congue sit amet. Cras placerat pulvinar pharetra. Nam malesuada tempor odio at suscipit. Morbi est mauris, facilisis vel dolor in, tincidunt rutrum erat. Phasellus quis ex feugiat, pharetra nisi eu, dapibus lacus. Sed tempus a felis id rhoncus. Pellentesque vel pellentesque lacus. Ut ut consectetur diam. Maecenas vitae rutrum erat, quis porta massa. Proin in tellus at metus tempus condimentum. Vestibulum ante ipsum primis in faucibus orci luctus et ultrices posuere cubilia Curae; Aliquam ac egestas est. Vivamus hendrerit tempor dui, eu vehicula elit. Quisque felis felis, faucibus sit amet ligula at, porta elementum metus. Suspendisse iaculis metus vitae enim tincidunt, quis fermentum leo cursus.</p>
 
 	<p>Proin a lobortis justo. Morbi metus ante, tempor id augue sit amet, finibus luctus nibh. Sed efficitur vehicula posuere. Fusce rutrum placerat auctor. Vestibulum ut sollicitudin purus. Praesent ullamcorper ex nisi, vitae finibus risus congue eu. Fusce volutpat efficitur commodo. Fusce pulvinar lobortis sodales. Proin eget eros ac augue pulvinar efficitur. Mauris at condimentum mi. Sed sit amet mi vel tortor interdum cursus.</p>""",
-        ),
     )
-    section = Section(
-        "Copyright",
-        content="""<h1>Copyright</h1>
+    book.add_section(chapter2)
+    chapter2.add_section(
+        Section(
+            "A subsection to chapter 2",
+            add_title=2,
+            styles="template",
+            content="<p>Some more stuff.</p>",
+        )
+    )
 
-    <p>You can create all sorts of pages that are not chapters as well, and simply give them different names.  As an idea you could use a page like this, and either list your name as the copyright or list it under another copyright, such as the <a href="https://en.wikipedia.org/wiki/GNU_General_Public_License">GNU License</a></p>""",
+    book.add_section(
+        Section(
+            "Copyright",
+            styles="template",
+            content="""<p>You can create all sorts of pages that are not chapters as well, and simply give them different names.  As an idea you could use a page like this, and either list your name as the copyright or list it under another copyright, such as the <a href="https://en.wikipedia.org/wiki/GNU_General_Public_License">GNU License</a></p>
+        <p>Original data from <a href="https://github.com/thansen0/sample-epub-minimal">https://github.com/thansen0/sample-epub-minimal</a></p>""",
+        )
     )
 
-    book.add_section("copyright", section)
-    section.add_section(
-        "additional", Section("Additional stuff", content="<p>Some more stuff.</p>")
-    )
     book.write("minimal.epub")
