@@ -193,10 +193,10 @@ class PdfCompiler(Compiler):
         self.flowables.append(Paragraph(title, style=self.stylesheet["Heading1"]))
         self.write_footnotes(self.text)
 
-    def write_footnote(self, text, footnote):
-        "Write the footnote in the given text."
-        for child in footnote["children"]:
-            self.render(child)
+    # def write_footnote(self, text, footnote):
+    #     "Write the footnote."
+    #     for child in footnote["children"]:
+    #         self.render(child)
 
     def write_references(self):
         "Write the references section, if any references."

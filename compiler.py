@@ -215,7 +215,7 @@ class Compiler:
             self.footnote_def_flag = None
 
     def write_footnote(self, text, footnote):
-        "Write the footnote in the given text."
+        "Write the footnote."
         for child in footnote["children"]:
             self.render(child)
 

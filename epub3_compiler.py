@@ -128,9 +128,9 @@ p.codeblock {
         self.write_footnotes(self.text)
 
     def write_footnote(self, text, footnote):
-        "Write the footnote in the given text."
+        "Write the definition for the footnote."
         self.push()
-        self.append(f'<a name="{text.identifier}-footnote-{footnote["number"]}"/>')
+        self.append(f'<a id="{footnote["identifier"]}"/>')
         for child in footnote["children"]:
             self.render(child)
         self.pop()
