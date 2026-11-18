@@ -88,12 +88,11 @@ class DocxCompiler(Compiler):
 
         # Dublin core metadata.
         self.doc.core_properties.title = self.text.title
-        self.doc.core_properties.language = self.text.language
         self.doc.core_properties.author = ", ".join(self.text.authors)
+        self.doc.core_properties.language = self.text.language
+        self.doc.core_properties.subject = self.text.frontmatter.get("subject")
         self.doc.core_properties.contributor = f"mdcompile {constants.__version__}"
         self.doc.core_properties.category = "book" if self.text.subtexts else "essay"
-        if self.text.subtitle:
-            self.doc.core_properties.subject = self.text.subtitle
         self.doc.core_properties.date = self.text.modified
 
         # Display page number in the DOCX header on each page.
@@ -314,7 +313,9 @@ class DocxCompiler(Compiler):
 
     def write_to_file(self, output_filepath):
         "Write the DOCX contents to file."
+        output_filepath = pathlib.Path(output_filepath.with_suffix(".docx"))
         self.doc.save(str(output_filepath))
+        return output_filepath
 
     def render_document(self, ast):
         self.list_stack = []

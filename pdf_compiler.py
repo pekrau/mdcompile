@@ -2,6 +2,7 @@
 
 import datetime as dt
 import io
+import pathlib
 
 import reportlab
 import reportlab.rl_config
@@ -301,22 +302,23 @@ class PdfCompiler(Compiler):
 
     def write_to_file(self, output_filepath):
         "Write the PDF contents to file."
+        output_filepath = pathlib.Path(output_filepath.with_suffix(".pdf"))
         with open(str(output_filepath), "wb") as outfile:
             props = dict(
                 title=self.text.title,
+                author=", ".join(self.text.authors),
                 language=self.text.language,
-                author=", ".join(self.text.authors) or None,
+                subject=self.text.frontmatter.get("subject"),
                 creator=f"mdcompile {constants.__version__}",
                 date=self.text.modified,
             )
-            if self.text.subtitle:
-                props["subject"] = self.text.subtitle
             if self.toc:
                 document = TocDocTemplate(outfile, toc_level=self.text.depth, **props)
                 document.multiBuild(self.flowables, onLaterPages=self.write_page_number)
             else:
                 document = SimpleDocTemplate(outfile, **props)
                 document.build(self.flowables, onLaterPages=self.write_page_number)
+        return output_filepath
 
     def write_page_number(self, canvas, doc):
         "Write page number onto the current canvas."

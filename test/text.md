@@ -1,10 +1,15 @@
 ---
-title: mdcompile test
+title: mdcompile book test
 subtitle: Checking the features.
 authors:
 - Per Kraulis
 language: en
 footnotes-location: chapter
+description: A description of the test files.
+subject: mdcompile, test, book
+rights: Copyright (C) 2026 Per Kraulis
+exclude:
+- essay
 ---
 > The purpose of writing is to inflate weak ideas.
 >

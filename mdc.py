@@ -16,7 +16,7 @@ import constants
 from docx_compiler import DocxCompiler
 from pdf_compiler import PdfCompiler
 from epub3_compiler import Epub3Compiler
-from text import read_texts
+from text import read_texts, Text
 
 
 class Timer:
@@ -59,7 +59,7 @@ class Timer:
 @optgroup.option("--docx", "-d", is_flag=True, help="DOCX format (default).")
 @optgroup.option("--pdf", "-p", is_flag=True, help="PDF format.")
 @optgroup.option("--epub3", "-e", is_flag=True, help="EPUB3 format.")
-def main(input_path, output_filepath, readme, docx, pdf, epub3):
+def cli(input_path, output_filepath, readme, docx, pdf, epub3):
     "Command-line script to compile Markdown file(s)."
     timer = Timer()
     click.echo(f"mdc {constants.__version__}")
@@ -69,48 +69,57 @@ def main(input_path, output_filepath, readme, docx, pdf, epub3):
     else:
         text = Text(input_path)
 
-    if not output_filepath.is_absolute():
-        output_filepath = text.filepath.parent / output_filepath
-    try:
-        if pdf:
-            compiler = PdfCompiler(text)
-            output_filepath = output_filepath.with_suffix(".pdf")
-        elif epub3:
-            compiler = Epub3Compiler(text)
-            output_filepath = output_filepath.with_suffix(".epub")
-        else:  # Default DOCX
-            compiler = DocxCompiler(text)
-            output_filepath = output_filepath.with_suffix(".docx")
-    except (ValueError, IOError) as error:
-        raise click.UsageError(str(error))
+    format = "epub3" if epub3 else "pdf" if pdf else "docx"
+    compiler = get_compiler(text, format=format)
 
     click.echo(f"{len(text)} Markdown files read.")
     click.echo(f"Footnotes at end of {compiler.footnotes_location}.")
     if compiler.library:
-        click.echo(
-            f"{len(compiler.referenced)} references from library '{compiler.library}'."
-        )
+        click.echo(f"{len(compiler.referenced)} references from '{compiler.library}'.")
+
+    try:
+        filepath = compiler.write(output_filepath)
+    except (ValueError, IOError) as error:
+        raise click.UsageError(str(error))
     click.echo(f"{len(compiler.indexed)} terms indexed.")
 
-    compiler.write(output_filepath)
     if compiler.paragraph_number is not None:
         click.echo(f"{compiler.paragraph_number} paragraphs.")
-    click.echo(f"Wrote '{output_filepath}'.")
+    click.echo(f"Wrote '{filepath}'.")
 
     if readme:
-        output_filepath = output_filepath.parent / constants.README_FILENAME
-        with open(output_filepath, "w") as outfile:
-            outfile.write(compiler.text.title + "\n")
-            outfile.write("=" * len(compiler.text.title) + "\n\n")
-            for subtext in compiler.text:
-                if subtext is compiler.text:
-                    continue
-                outfile.write(" " * 5 * (len(subtext.ordinal) - 1))
-                outfile.write(f"{subtext.ordinal[-1]}. {subtext.title}\n")
-        click.echo(f"Wrote '{output_filepath}'.")
+        filepath = output_filepath.parent / constants.README_FILENAME
+        write_readme(filepath, text)
+        click.echo(f"Wrote '{filepath}'.")
 
     click.echo(timer)
 
 
+def get_compiler(text, format="docx"):
+    "Create and return the compiler for the format."
+    match format:
+        case "pdf":
+            compiler = PdfCompiler(text)
+        case "epub3":
+            compiler = Epub3Compiler(text)
+        case "docx":
+            compiler = DocxCompiler(text)
+        case _:
+            raise ValueError(f"unknown format '{format}'")
+    return compiler
+
+
+def write_readme(output_filepath, text):
+    "Write out a README.md file for the book."
+    with open(output_filepath, "w") as outfile:
+        outfile.write(compiler.text.title + "\n")
+        outfile.write("=" * len(compiler.text.title) + "\n\n")
+        for subtext in compiler.text:
+            if subtext is compiler.text:
+                continue
+            outfile.write(" " * 5 * (len(subtext.ordinal) - 1))
+            outfile.write(f"{subtext.ordinal[-1]}. {subtext.title}\n")
+
+
 if __name__ == "__main__":
-    main()
+    cli()

@@ -1,6 +1,7 @@
 "Abstract compiler class."
 
 import os
+import pathlib
 
 import constants
 import library
@@ -150,7 +151,9 @@ class Compiler:
                         text.footnotes.clear()
 
     def write(self, output_filepath):
-        "Write the contents to a file of the specified format."
+        """Write the contents to a file.
+        Return the filepath actually used.
+        """
         self.write_setup()
         # There are subtexts: a book.
         if self.text.subtexts:
@@ -167,7 +170,7 @@ class Compiler:
             self.write_title_page()
             self.write_references()
             # No index for essay.
-        self.write_to_file(output_filepath)
+        return self.write_to_file(output_filepath)
 
     def write_setup(self):
         "Set up the document for the specified format."

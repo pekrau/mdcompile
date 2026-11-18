@@ -40,20 +40,14 @@ p.codeblock {
 a.internal {
   color: darkgreen;
 }""")
-        for author in self.text.authors:
-            self.book.creators.append(author)
-        self.book.contributor = f"mdcompile {constants.__version__}"
+        self.book.creators.extend(self.text.authors)
+        self.book.subject = self.text.frontmatter.get("subject")
+        self.book.contributors.append(f"mdcompile {constants.__version__}")
         self.book.type = "book" if self.text.subtexts else "essay"
-        if self.text.subtitle:
-            self.book.description = self.text.subtitle
-        if source := self.text.frontmatter.get("source"):
-            self.book.source = source
-        if subject := self.text.frontmatter.get("subject"):
-            self.book.subject = subject
-        if publisher := self.text.frontmatter.get("publisher"):
-            self.book.publisher = publisher
-        if rights := self.text.frontmatter.get("rights"):
-            self.book.rights = rights
+        self.book.description = self.text.frontmatter.get("description")
+        self.book.subject = self.text.frontmatter.get("subject")
+        self.book.publisher = self.text.frontmatter.get("publisher")
+        self.book.rights = self.text.frontmatter.get("rights")
         self.book.date = self.text.modified.isoformat()
         self.stack = []
 
@@ -246,7 +240,9 @@ a.internal {
 
     def write_to_file(self, output_filepath):
         "Write the EPUB3 contents to file."
+        output_filepath = pathlib.Path(output_filepath.with_suffix(".epub"))
         self.book.write(output_filepath)
+        return output_filepath
 
     def render_document(self, ast):
         "Render the contents of the text."
@@ -392,7 +388,6 @@ a.internal {
 
     def render_footnote_ref(self, ast):
         href = f"{ast['text'].identifier}-footnotes.xhtml#{ast['identifier']}"
-        ic(ast["text"], href)
         self.append(f'<sup><a href="{href}">{ast["number"]}</a></sup>')
 
     def render_footnote_def_setup(self, ast):
@@ -400,7 +395,6 @@ a.internal {
         self.push()
         self.append("<p>")
         id = f"{ast['identifier']}"
-        ic(ast["text"], id)
         self.append(f'<a id="{id}"/><strong>{ast["number"]}.</strong> ')
         self.within_footnote = -1
 

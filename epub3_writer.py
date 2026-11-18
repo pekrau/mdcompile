@@ -36,8 +36,8 @@ class Book:
         self.creators = []  # Dublin Core for authors
         self.contributors = []  # Dublin core
         self.type = None  # Dublin Core
-        self.description = None  # Dublin Core
         self.source = None  # Dublin Core
+        self.description = None  # Dublin Core
         self.subject = None  # Dublin Core
         self.publisher = None  # Dublin Core
         self.rights = None  # Dublin Core
@@ -151,10 +151,10 @@ p.codeblock {
             metadata.create("dc:type").append(self.type)
         if self.source:
             metadata.create("dc:source").append(self.source)
-        if self.subject:
-            metadata.create("dc:subject").append(self.subject)
         if self.description:
             metadata.create("dc:description").append(self.description)
+        if self.subject:
+            metadata.create("dc:subject").append(self.subject)
         if self.publisher:
             metadata.create("dc:publisher").append(self.publisher)
         if self.rights:

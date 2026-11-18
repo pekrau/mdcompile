@@ -57,6 +57,11 @@ The Markdown files may contain frontmatter in YAML format. The entries may be:
   each paragraph in the book. Default: 'false'
 - *library*: The path to the library directory containing references.
   Default: environment variable LIBRARY_DIR
+- *description*: Description. Default: none.
+- *subject*: Subject description, keywords. Default: none.
+- *publisher*: Publisher. Default: none.
+- *rights*: Copyright notice or similar. Default: none.
+
 
 ## Dependencies
 

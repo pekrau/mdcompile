@@ -10,21 +10,23 @@ import utils
 
 
 def read_texts(directory, supertext=None, ordinal=None):
-    """Read the Markdown file(s) in the given directory,
-    and recursively in any subdirectories.
+    """Read the Markdown file(s) in the given directory, and recursively in
+    any subdirectories. There must be a file 'text.md' in each directory.
     """
-    root = Text(directory / text_filename, supertext=supertext, ordinal=ordinal)
+    root = Text(directory / constants.TEXT_FILENAME, supertext=supertext, ordinal=ordinal)
     ordinal = 0
     for path in sorted(directory.iterdir()):
-        if path.name == text_filename:
+        if path.name == constants.TEXT_FILENAME:
             continue
         if path.name == constants.README_FILENAME:
             continue
         if path.name.startswith("."):
             continue
+        if path.stem in root.frontmatter.get("exclude", []):
+            continue
         if path.is_dir():
             ordinal += 1
-            read_texts(path, text_filename, supertext=root, ordinal=ordinal)
+            read_texts(path, supertext=root, ordinal=ordinal)
         elif path.suffix == ".md":
             ordinal += 1
             Text(path, supertext=root, ordinal=ordinal)
