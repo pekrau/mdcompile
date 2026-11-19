@@ -340,7 +340,7 @@ class Compiler:
 
     def render_footnote_def(self, ast):
         "Render a footnote definition."
-        if not "number" in ast: # Skip on first pass, within text.
+        if not "number" in ast:  # Skip on first pass, within text.
             return
         self.render_footnote_def_setup(ast)
         self.within_footnote = +1

@@ -335,7 +335,9 @@ class DocxCompiler(Compiler):
 
     def render_paragraph(self, ast):
         # NOTE: this flag may have value -True, denoting continued definition.
-        if self.within_footnote == False: # If footnote started, then paragraph created.
+        if (
+            self.within_footnote == False
+        ):  # If footnote started, then paragraph created.
             self.current_paragraph = self.doc.add_paragraph()
 
         # Handle list special case.

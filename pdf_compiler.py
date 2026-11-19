@@ -120,9 +120,7 @@ class PdfCompiler(Compiler):
         self.flowables.append(
             Paragraph(self.text.title, style=self.stylesheet["Title"])
         )
-        self.flowables.append(
-            HRFlowable(width="100%", color="black", spaceAfter=20)
-        )
+        self.flowables.append(HRFlowable(width="100%", color="black", spaceAfter=20))
         if self.text.subtitle:
             self.write_heading(self.text.subtitle, 1)
         for author in self.text.authors:
@@ -277,9 +275,7 @@ class PdfCompiler(Compiler):
         if published := reference.get("published"):
             self.append(f" {self.tx('published')} {published}")
         if href := reference.get("href"):
-            self.append(
-                f' <a href="{href}" underline="1" color="blue">{href}</a>'
-            )
+            self.append(f' <a href="{href}" underline="1" color="blue">{href}</a>')
             if accessed := reference.get("accessed"):
                 self.append(f" ({self.tx('accessed')} {accessed})")
 
@@ -297,7 +293,7 @@ class PdfCompiler(Compiler):
             self.push("Index")
             self.append(f'<a name="index-{utils.safe(canonical)}"/>{canonical}')
             for text in texts:
-                self.append(f'<br/>{text.ordinal_title}')
+                self.append(f"<br/>{text.ordinal_title}")
             self.pop()
 
     def write_to_file(self, output_filepath):
@@ -382,7 +378,9 @@ class PdfCompiler(Compiler):
 
     def render_paragraph(self, ast):
         # NOTE: this flag may have value -1, denoting continued definition.
-        if self.within_footnote == False: # If footnote started, then paragraph created.
+        if (
+            self.within_footnote == False
+        ):  # If footnote started, then paragraph created.
             self.push()
 
         # Prepend paragraph number.
@@ -391,7 +389,7 @@ class PdfCompiler(Compiler):
             self.append('<font face="courier">')
             self.append(f"({self.paragraph_number})")
             self.append("</font> ")
-            
+
         for child in ast["children"]:
             self.render(child)
 
@@ -401,9 +399,9 @@ class PdfCompiler(Compiler):
         elif self.within_code:
             self.pop(stylename="Code", preformatted=True)
         elif self.within_footnote:
-            if self.within_footnote > 0: # Starting footnote definition.
+            if self.within_footnote > 0:  # Starting footnote definition.
                 self.pop(stylename="Footnote")
-            else: # Continuing footnote definition.
+            else:  # Continuing footnote definition.
                 self.pop(stylename="Footnote subsequent")
         else:
             self.pop()
@@ -507,20 +505,28 @@ class PdfCompiler(Compiler):
         self.list_stack[-1].append(item)
 
     def render_indexed(self, ast):
-        self.append(f'<a href="#index-{utils.safe(ast["canonical"])}" underline="1" color="darkgreen">{ast["term"]}</a>')
+        self.append(
+            f'<a href="#index-{utils.safe(ast["canonical"])}" underline="1" color="darkgreen">{ast["term"]}</a>'
+        )
 
     def render_footnote_ref(self, ast):
-        self.append(f'<sup><strong><a name="{ast["identifier"]}-ref"/><a href="#{ast["identifier"]}" underline="1" color="darkgreen">{ast["number"]}</a></strong></sup>')
+        self.append(
+            f'<sup><strong><a name="{ast["identifier"]}-ref"/><a href="#{ast["identifier"]}" underline="1" color="darkgreen">{ast["number"]}</a></strong></sup>'
+        )
 
     def render_footnote_def_setup(self, ast):
         "Setup the footnote rendering; output number."
         self.push()
         self.append(f'<a name="{ast["identifier"]}"/>')
-        self.append(f'<a href="#{ast["identifier"]}-ref" underline="1" color="darkgreen"><strong>{ast["number"]}.</strong></a> ')
+        self.append(
+            f'<a href="#{ast["identifier"]}-ref" underline="1" color="darkgreen"><strong>{ast["number"]}.</strong></a> '
+        )
         self.within_footnote = -1
 
     def render_reference(self, ast):
-        self.append(f'<em><a href="#{ast["name"]}" underline="1" color="darkgreen">{ast["name"]}</a></em>')
+        self.append(
+            f'<em><a href="#{ast["name"]}" underline="1" color="darkgreen">{ast["name"]}</a></em>'
+        )
         if self.reference_title:
             self.append(f': <em>{self.referenced[ast["name"]]["title"]}</em>')
 

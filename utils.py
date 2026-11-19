@@ -6,8 +6,7 @@ import unicodedata
 
 import constants
 
-
-SAFE_CHARACTERS = set(string.ascii_letters + string.digits) # Blank is not safe.
+SAFE_CHARACTERS = set(string.ascii_letters + string.digits)  # Blank is not safe.
 
 
 def safe(s, casefold=True):
@@ -15,9 +14,7 @@ def safe(s, casefold=True):
     result = unicodedata.normalize("NFKD", s).encode("ASCII", "ignore").decode("utf-8")
     if casefold:
         result = result.casefold()
-    return "".join(
-        [c if c in SAFE_CHARACTERS else "-" for c in result]
-    )
+    return "".join([c if c in SAFE_CHARACTERS else "-" for c in result])
 
 
 def isoformat(datetime=None):

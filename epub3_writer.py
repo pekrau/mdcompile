@@ -46,7 +46,9 @@ class Document:
         if basic_style:
             self.add_basic_style()
         self.toc = True
-        self.toc_styles = True  # True: all styles used for TOC. Else list of style names.
+        self.toc_styles = (
+            True  # True: all styles used for TOC. Else list of style names.
+        )
         self.sections = {}  # Key: name, value: Section instance.
 
     def add_style(self, name, css_content):
@@ -313,7 +315,9 @@ class Section:
                 raise ValueError(f"section name '{section.name}' is already in section")
         else:
             if section.name in self.document.get_all_names():
-                raise ValueError(f"section name '{section.name}' is already in document")
+                raise ValueError(
+                    f"section name '{section.name}' is already in document"
+                )
         self.subsections[section.name] = section
         section.document = self.document
 

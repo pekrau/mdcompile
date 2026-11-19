@@ -18,8 +18,9 @@ class Epub3Compiler(Compiler):
         self.document = epub3.Document(
             self.text.title, self.text.identifier, self.text.language
         )
-        self.document.add_style("standard",
-"""body {
+        self.document.add_style(
+            "standard",
+            """body {
   font-family: Helvetica, Arial, Verdana, sans-serif;
   background-color: white;
 }
@@ -39,7 +40,8 @@ p.codeblock {
 }
 a.internal {
   color: darkgreen;
-}""")
+}""",
+        )
         self.document.creators.extend(self.text.authors)
         self.document.subject = self.text.frontmatter.get("subject")
         self.document.contributors.append(f"mdcompile {constants.__version__}")
@@ -97,7 +99,9 @@ a.internal {
     def write_text_setup(self, text):
         "Set up for the next text. Output the text title. Record section for TOC."
         title = text.ordinal_title
-        self.current_section = text.section = epub3.Section(title, add_title=text.level, name=text.identifier)
+        self.current_section = text.section = epub3.Section(
+            title, add_title=text.level, name=text.identifier
+        )
         if text.supertext is self.text:  # First-level subtext; chapter.
             self.document.add_section(self.current_section)
         else:
@@ -109,7 +113,9 @@ a.internal {
             return
         if not self.footnotes_location == constants.FOOTNOTES_CHAPTER:
             return
-        self.current_section = epub3.Section(self.tx("Footnotes"), add_title=2, name=f"{text.identifier}-footnotes")
+        self.current_section = epub3.Section(
+            self.tx("Footnotes"), add_title=2, name=f"{text.identifier}-footnotes"
+        )
         sections = list(self.document.sections.values())
         sections[-1].add_section(self.current_section)
         self.write_footnotes(text)
@@ -228,10 +234,14 @@ a.internal {
         for canonical, texts in items:
             self.push()
             self.append("<dl>")
-            self.append(f'<dt><a id="{utils.safe(canonical)}"/>{escape(canonical)}</dt>')
+            self.append(
+                f'<dt><a id="{utils.safe(canonical)}"/>{escape(canonical)}</dt>'
+            )
             self.append("<dd>")
             for text in texts:
-                self.append(f'<a href="{text.identifier}.xhtml#{utils.safe(canonical)}">{escape(text.ordinal_title)}</a>')
+                self.append(
+                    f'<a href="{text.identifier}.xhtml#{utils.safe(canonical)}">{escape(text.ordinal_title)}</a>'
+                )
                 if text is not texts[-1]:
                     self.append("<br/>")
             self.append("</dd></dl>")
@@ -264,7 +274,9 @@ a.internal {
 
     def render_paragraph(self, ast):
         # NOTE: this flag may have value -1, denoting continued definition.
-        if self.within_footnote == False: # If footnote started, then paragraph created.
+        if (
+            self.within_footnote == False
+        ):  # If footnote started, then paragraph created.
             self.push()
             self.append("<p>")
         if self.paragraph_number is not None:
@@ -400,7 +412,9 @@ a.internal {
 
     def render_reference(self, ast):
         self.push()
-        self.append(f'<a href="{self.tx("References")}.xhtml#{utils.safe(ast["name"])}" class="internal">{escape(ast["name"])}</a>')
+        self.append(
+            f'<a href="{self.tx("References")}.xhtml#{utils.safe(ast["name"])}" class="internal">{escape(ast["name"])}</a>'
+        )
         if self.reference_title:
             self.append(": ")
             reference = self.referenced[ast["name"]]

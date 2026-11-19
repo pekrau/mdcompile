@@ -45,14 +45,18 @@ class Timer:
 @optgroup.option("--docx", "-d", is_flag=True, help="DOCX format (default).")
 @optgroup.option("--pdf", "-p", is_flag=True, help="PDF format.")
 @optgroup.option("--epub3", "-e", is_flag=True, help="EPUB3 format.")
-@click.argument("inputpath",
-                default=None,
-                type=click.Path(exists=True, resolve_path=True, path_type=pathlib.Path),
-                help=f"Directory or Markdown file to compile. If directory, assumes the existence of the file '{constants.TEXT_FILENAME}' in it.")
-@click.argument("outputpath",
-                default=None,
-                type=click.Path(exists=False, path_type=pathlib.Path),
-                help="Optional output file path. Computed from INPUTPATH if not given. The file extension, if given, determines the output format.")
+@click.argument(
+    "inputpath",
+    default=None,
+    type=click.Path(exists=True, resolve_path=True, path_type=pathlib.Path),
+    help=f"Directory or Markdown file to compile. If directory, assumes the existence of the file '{constants.TEXT_FILENAME}' in it.",
+)
+@click.argument(
+    "outputpath",
+    default=None,
+    type=click.Path(exists=False, path_type=pathlib.Path),
+    help="Optional output file path. Computed from INPUTPATH if not given. The file extension, if given, determines the output format.",
+)
 def cli(inputpath, outputpath, readme, docx, pdf, epub3):
     "Command-line script to compile Markdown file(s)."
     timer = Timer()

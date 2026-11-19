@@ -9,7 +9,7 @@ description: A description of the test files.
 subject: mdcompile, test, book
 rights: Copyright (C) 2026 Per Kraulis
 exclude:
-- essay
+- essay.md
 ---
 > The purpose of writing is to inflate weak ideas.
 >
