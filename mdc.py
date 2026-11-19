@@ -32,53 +32,62 @@ class Timer:
 @click.command()
 @click.help_option("--help", "-h")
 @click.option(
-    "--input_path",
-    "-i",
-    type=click.Path(exists=True, resolve_path=True, path_type=pathlib.Path),
-    default=f"{constants.TEXT_FILENAME}",
-    help=f"Markdown file or directory to compile. Default '{constants.TEXT_FILENAME}'.",
-)
-@click.option(
-    "--output_filepath",
-    "-o",
-    type=click.Path(exists=False, path_type=pathlib.Path),
-    default=f"{constants.OUTPUT_FILENAME}",
-    help=f"Output file name. The extension depends on the output format. Default '{constants.OUTPUT_FILENAME}'.",
-)
-@click.option(
     "--readme",
     "-r",
     is_flag=True,
-    help=f"Write out a '{constants.README_FILENAME}' file for the compiled file(s).",
+    help=f"Also write out a '{constants.README_FILENAME}' file for the compiled file(s).",
 )
 @optgroup.group(
     "Output formats",
     cls=MutuallyExclusiveOptionGroup,
-    help="Formats to compile Markdown into.",
+    help="Formats to compile Markdown into. Overridden by an explicit extension in OUTPUTPATH.",
 )
 @optgroup.option("--docx", "-d", is_flag=True, help="DOCX format (default).")
 @optgroup.option("--pdf", "-p", is_flag=True, help="PDF format.")
 @optgroup.option("--epub3", "-e", is_flag=True, help="EPUB3 format.")
-def cli(input_path, output_filepath, readme, docx, pdf, epub3):
+@click.argument("inputpath",
+                default=None,
+                type=click.Path(exists=True, resolve_path=True, path_type=pathlib.Path),
+                help=f"Directory or Markdown file to compile. If directory, assumes the existence of the file '{constants.TEXT_FILENAME}' in it.")
+@click.argument("outputpath",
+                default=None,
+                type=click.Path(exists=False, path_type=pathlib.Path),
+                help="Optional output file path. Computed from INPUTPATH if not given. The file extension, if given, determines the output format.")
+def cli(inputpath, outputpath, readme, docx, pdf, epub3):
     "Command-line script to compile Markdown file(s)."
     timer = Timer()
     click.echo(f"mdc {constants.__version__}")
 
-    if input_path.is_dir():
-        text = read_texts(input_path)
+    if not inputpath:
+        raise click.UsageError("no inputpath given")
+    elif inputpath.is_dir():
+        text = read_texts(inputpath)
     else:
-        text = Text(input_path)
+        text = Text(inputpath)
 
     format = "epub3" if epub3 else "pdf" if pdf else "docx"
+    if outputpath:
+        if extension := outputpath.suffix.lower():
+            format = extension.lstrip(".")
+            if format == "epub":
+                format = "epub3"
+    extension = f".{format}"
     compiler = get_compiler(text, format=format)
 
     click.echo(f"{len(text)} Markdown files read.")
-    click.echo(f"Footnotes at end of {compiler.footnotes_location}.")
     if compiler.library:
         click.echo(f"{len(compiler.referenced)} references from '{compiler.library}'.")
 
+    if inputpath.is_dir():
+        if outputpath is None:
+            outputpath = inputpath / constants.OUTPUT_FILENAME
+        elif outputpath.is_dir():
+            outputpath = outputpath / constants.OUTPUT_FILENAME
+    elif outputpath is None:
+        outputpath = inputpath.with_suffix(extension)
+
     try:
-        filepath = compiler.write(output_filepath)
+        filepath = compiler.write(outputpath.with_suffix(extension))
     except (ValueError, IOError) as error:
         raise click.UsageError(str(error))
     click.echo(f"{len(compiler.indexed)} terms indexed.")
@@ -88,7 +97,7 @@ def cli(input_path, output_filepath, readme, docx, pdf, epub3):
     click.echo(f"Wrote '{filepath}'.")
 
     if readme:
-        filepath = output_filepath.parent / constants.README_FILENAME
+        filepath = outputpath.parent / constants.README_FILENAME
         write_readme(filepath, text)
         click.echo(f"Wrote '{filepath}'.")
 
@@ -109,9 +118,9 @@ def get_compiler(text, format="docx"):
     return compiler
 
 
-def write_readme(output_filepath, text):
+def write_readme(outputpath, text):
     "Write out a README.md file for the book."
-    with open(output_filepath, "w") as outfile:
+    with open(outputpath, "w") as outfile:
         outfile.write(compiler.text.title + "\n")
         outfile.write("=" * len(compiler.text.title) + "\n\n")
         for subtext in compiler.text:

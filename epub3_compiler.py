@@ -15,10 +15,10 @@ class Epub3Compiler(Compiler):
 
     def write_setup(self):
         "Set up the EPUB3 document."
-        self.book = epub3.Book(
+        self.document = epub3.Document(
             self.text.title, self.text.identifier, self.text.language
         )
-        self.book.add_style("standard",
+        self.document.add_style("standard",
 """body {
   font-family: Helvetica, Arial, Verdana, sans-serif;
   background-color: white;
@@ -40,15 +40,15 @@ p.codeblock {
 a.internal {
   color: darkgreen;
 }""")
-        self.book.creators.extend(self.text.authors)
-        self.book.subject = self.text.frontmatter.get("subject")
-        self.book.contributors.append(f"mdcompile {constants.__version__}")
-        self.book.type = "book" if self.text.subtexts else "essay"
-        self.book.description = self.text.frontmatter.get("description")
-        self.book.subject = self.text.frontmatter.get("subject")
-        self.book.publisher = self.text.frontmatter.get("publisher")
-        self.book.rights = self.text.frontmatter.get("rights")
-        self.book.date = self.text.modified.isoformat()
+        self.document.creators.extend(self.text.authors)
+        self.document.subject = self.text.frontmatter.get("subject")
+        self.document.contributors.append(f"mdcompile {constants.__version__}")
+        self.document.type = "book" if self.text.subtexts else "essay"
+        self.document.description = self.text.frontmatter.get("description")
+        self.document.subject = self.text.frontmatter.get("subject")
+        self.document.publisher = self.text.frontmatter.get("publisher")
+        self.document.rights = self.text.frontmatter.get("rights")
+        self.document.date = self.text.modified.isoformat()
         self.stack = []
 
     def push(self):
@@ -75,7 +75,7 @@ a.internal {
         "Write the title page. If no subtexts, this is all content except references."
         title = self.tx("Title page") if self.text.subtexts else self.text.title
         self.current_section = epub3.Section(title, add_title=False)
-        self.book.add_section(self.current_section)
+        self.document.add_section(self.current_section)
         self.push()
         self.append(f"<h1>{escape(self.text.title)}</h1>")
         if self.text.subtitle:
@@ -99,7 +99,7 @@ a.internal {
         title = text.ordinal_title
         self.current_section = text.section = epub3.Section(title, add_title=text.level, name=text.identifier)
         if text.supertext is self.text:  # First-level subtext; chapter.
-            self.book.add_section(self.current_section)
+            self.document.add_section(self.current_section)
         else:
             text.supertext.section.add_section(self.current_section)
 
@@ -110,7 +110,7 @@ a.internal {
         if not self.footnotes_location == constants.FOOTNOTES_CHAPTER:
             return
         self.current_section = epub3.Section(self.tx("Footnotes"), add_title=2, name=f"{text.identifier}-footnotes")
-        sections = list(self.book.sections.values())
+        sections = list(self.document.sections.values())
         sections[-1].add_section(self.current_section)
         self.write_footnotes(text)
 
@@ -130,7 +130,7 @@ a.internal {
             title = self.tx("References")
             if self.text.subtexts:  # Book; references in a separate section.
                 self.current_section = epub3.Section(title)
-                self.book.add_section(self.current_section)
+                self.document.add_section(self.current_section)
             else:  # Essay; references after the text; no new section.
                 self.references_section = None
                 self.push()
@@ -222,7 +222,7 @@ a.internal {
         if not self.indexed:
             return
         self.current_section = epub3.Section(self.tx("Index"))
-        self.book.add_section(self.current_section)
+        self.document.add_section(self.current_section)
         self.push()
         items = sorted(self.indexed.items(), key=lambda i: i[0].casefold())
         for canonical, texts in items:
@@ -241,7 +241,7 @@ a.internal {
     def write_to_file(self, output_filepath):
         "Write the EPUB3 contents to file."
         output_filepath = pathlib.Path(output_filepath.with_suffix(".epub"))
-        self.book.write(output_filepath)
+        self.document.write(output_filepath)
         return output_filepath
 
     def render_document(self, ast):

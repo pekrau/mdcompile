@@ -2,7 +2,7 @@
 
 import re
 
-VERSION = (0, 8, 7)
+VERSION = (0, 9, 0)
 __version__ = ".".join([str(n) for n in VERSION])
 
 FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)
@@ -12,7 +12,7 @@ EM_DASH = "\u2014"
 DATETIME_ISOFORMAT = "%Y-%m-%d %H:%M"
 
 TEXT_FILENAME = "text.md"
-OUTPUT_FILENAME = "manuscript"
+OUTPUT_FILENAME = "document"
 README_FILENAME = "README.md"
 CSS_FILENAME = "pico.min.css"
 CSS_URL = "https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"

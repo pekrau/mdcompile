@@ -8,7 +8,7 @@ TODO:
 
 __version__ = "0.5"
 
-__all__ = ["Book", "Section", "minixml", "__version__"]
+__all__ = ["Document", "Section", "minixml", "__version__"]
 
 import datetime as dt
 import string
@@ -26,8 +26,8 @@ def safe(s):
     return "".join([c if c in SAFE_CHARACTERS else "-" for c in s])
 
 
-class Book:
-    "Book containing sections to write out as an EPUB3 format file."
+class Document:
+    "Document containing sections to write out as an EPUB3 format file."
 
     def __init__(self, title, identifier, language="sv-SE", basic_style=False):
         self.title = title  # Dublin Core
@@ -83,7 +83,7 @@ p.codeblock {
     def add_toc_style(self, name):
         "Use the explicit style for the TOC. Added to the current list, if any."
         if name not in self.styles:
-            raise ValueError(f"style '{name}' not defined in book")
+            raise ValueError(f"style '{name}' not defined in document")
         if isinstance(self.toc_styles, list):
             self.toc_styles.append(name)
         else:
@@ -94,14 +94,14 @@ p.codeblock {
         The order of addition is significant.
         """
         assert isinstance(section, Section)
-        assert section.book is None
+        assert section.document is None
         section_names = set(section.get_all_names())
-        book_names = set(self.get_all_names())
-        names = ", ".join([f"'n'" for n in section_names.intersection(book_names)])
+        document_names = set(self.get_all_names())
+        names = ", ".join([f"'n'" for n in section_names.intersection(document_names)])
         if names:
-            raise ValueError(f"section name(s) {names} already in book")
+            raise ValueError(f"section name(s) {names} already in document")
         self.sections[section.name] = section
-        section.book = self
+        section.document = self
 
     def get_all_names(self):
         "Get all names for all sections and their subsections, recursively."
@@ -199,7 +199,7 @@ p.codeblock {
             styles = []
         for style in styles:
             if style not in self.styles:
-                raise ValueError(f"TOC style '{style}' is not present in book")
+                raise ValueError(f"TOC style '{style}' is not present in document")
             head.create(
                 "link", href=f"CSS/{style}.css", rel="stylesheet", type="text/css"
             )
@@ -241,15 +241,15 @@ p.codeblock {
 
 
 class Section:
-    "Section in Book; XHTML code container."
+    "Section in Document; XHTML code container."
 
     def __init__(self, title, add_title=1, name=None, content=None, styles=True):
-        """'title' must be unique in the book.
+        """'title' must be unique in the document.
         It is output as a 'title' element in 'html' 'head'.
         If 'add_title' is non-zero, 'title' is output in an 'h' element as
         the first element in the 'body' preceding any content.
         If 'name' is provided, it must be safe.
-        If 'styles' is True, then use all styles defined for its book.
+        If 'styles' is True, then use all styles defined for its document.
         If 'styles' is a string, then use only those (comma-delimited).
         """
         assert title
@@ -257,7 +257,7 @@ class Section:
         assert content is None or isinstance(content, (str, minixml.Element))
         self.title = title
         self.name = safe(name or title)
-        self.book = None
+        self.document = None
         if isinstance(styles, str):
             self.styles = [s for s in styles.split()]
         else:
@@ -277,13 +277,13 @@ class Section:
         head.create("title").append(self.title)
         styles = []
         if self.styles is True:
-            if self.book:
-                styles = list(self.book.styles.keys())
+            if self.document:
+                styles = list(self.document.styles.keys())
         elif isinstance(self.styles, list):
             styles = self.styles
         for style in styles:
-            if self.book and style not in self.book.styles:
-                raise ValueError(f"section style '{style}' is not present in book")
+            if self.document and style not in self.document.styles:
+                raise ValueError(f"section style '{style}' is not present in document")
             head.create(
                 "link", href=f"CSS/{style}.css", rel="stylesheet", type="text/css"
             )
@@ -307,15 +307,15 @@ class Section:
     def add_section(self, section):
         "Add a subsection. The order of addition is significant."
         assert isinstance(section, Section)
-        assert section.book is None
-        if self.book is None:
+        assert section.document is None
+        if self.document is None:
             if section.name in self.get_all_names():
                 raise ValueError(f"section name '{section.name}' is already in section")
         else:
-            if section.name in self.book.get_all_names():
-                raise ValueError(f"section name '{section.name}' is already in book")
+            if section.name in self.document.get_all_names():
+                raise ValueError(f"section name '{section.name}' is already in document")
         self.subsections[section.name] = section
-        section.book = self.book
+        section.document = self.document
 
     def get_all_names(self):
         "Get all names for this section and its subsections, recursively."
@@ -347,8 +347,8 @@ class Section:
 if __name__ == "__main__":
     import pathlib
 
-    book = Book("Sample .epub Book", "isbn")
-    book.add_style(
+    document = Document("Sample .epub Book", "isbn")
+    document.add_style(
         "template",
         """h1 {
   text-align: right;
@@ -379,11 +379,11 @@ li {
 	line-height: 1.4em;
 }""",
     )
-    book.creators.append("Thomas Hansen")
-    book.creators.append("Per Kraulis")
-    book.contributors.append(f"epub3_writer {__version__}")
-    book.description = "Testing a few chapters, a subsection, and a TOC."
-    book.add_section(
+    document.creators.append("Thomas Hansen")
+    document.creators.append("Per Kraulis")
+    document.contributors.append(f"epub3_writer {__version__}")
+    document.description = "Testing a few chapters, a subsection, and a TOC."
+    document.add_section(
         Section(
             "Chapter 1",
             styles="template",
@@ -421,7 +421,7 @@ li {
 
 	<p>Proin a lobortis justo. Morbi metus ante, tempor id augue sit amet, finibus luctus nibh. Sed efficitur vehicula posuere. Fusce rutrum placerat auctor. Vestibulum ut sollicitudin purus. Praesent ullamcorper ex nisi, vitae finibus risus congue eu. Fusce volutpat efficitur commodo. Fusce pulvinar lobortis sodales. Proin eget eros ac augue pulvinar efficitur. Mauris at condimentum mi. Sed sit amet mi vel tortor interdum cursus.</p>""",
     )
-    book.add_section(chapter2)
+    document.add_section(chapter2)
     chapter2.add_section(
         Section(
             "A subsection to chapter 2",
@@ -431,7 +431,7 @@ li {
         )
     )
 
-    book.add_section(
+    document.add_section(
         Section(
             "Copyright",
             styles="template",
@@ -440,4 +440,4 @@ li {
         )
     )
 
-    book.write("minimal.epub")
+    document.write("minimal.epub")
