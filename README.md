@@ -41,31 +41,49 @@ it will be compiled. The directory structure must be as follows:
 
 - The top directory and all its subdirectories must contain a 'text.md' file,
   which may be empty.
+
 - Each Markdown file and subdirectory on the first level are compiled into
   chapters of the document.
+
 - The subdirectory's Markdown files and its subdirectories are compiled into
   sections of the chapter, recursively.
+
 - The Markdown files and/or subdirectories in the each directory will be added
   to the document in lexicographic order by their names.
 
-The Markdown files may contain frontmatter in YAML format. The entries may be:
+The Markdown files may contain frontmatter in YAML format. All entries except
+for *title* and *subtitle* are effective only when provided in the top Markdown
+file for a document.
+
 - *title*: The title of the document (if the top 'text.md' file) or title of the chapter
   or section. Default: the name of the file or directory.
+
 - *subtitle*: The subtitle of the document, chapter or section. Default: none.
+
 - *authors*: A list of strings giving the authors of the document or document. No default.
+
 - *language*: Default: 'sv-SE'.
+
 - *identifier*: A unique identifier for the document.
+
 - *footnotes-location*: One of 'document', 'chapter' or 'text' (default), specifying
   where footnote definitions will be written. Default: 'text'
+
 - *reference-title*: Boolean 'true' or 'false': Whether to output the title of a
   reference when given in the text. Default: 'false'
+
 - *paragraph-numbers*: Boolean 'true' or 'false': Whether to output the number of
   each paragraph in the document. Default: 'false'
+
 - *library*: The path to the library directory containing references.
   Default: environment variable LIBRARY_DIR
+
 - *description*: Description. Default: none.
+
 - *subject*: Subject description, keywords. Default: none.
+
 - *publisher*: Publisher. Default: none.
+
 - *rights*: Copyright notice or similar. Default: none.
 
 
