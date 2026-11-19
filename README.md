@@ -66,7 +66,7 @@ file for a document.
 
 - *identifier*: A unique identifier for the document.
 
-- *footnotes-location*: One of 'document', 'chapter' or 'text' (default), specifying
+- *footnotes-location*: One of 'document', 'chapter' or 'text', specifying
   where footnote definitions will be written. Default: 'text'
 
 - *reference-title*: Boolean 'true' or 'false': Whether to output the title of a
