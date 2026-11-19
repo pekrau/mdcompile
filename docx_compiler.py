@@ -481,7 +481,7 @@ class DocxCompiler(Compiler):
             run.font.italic = True
 
     def render_footnote_ref(self, ast):
-        run = self.current_paragraph.add_run(str(ast['number']))
+        run = self.current_paragraph.add_run(str(ast["number"]))
         run.font.superscript = True
         run.font.bold = True
 

@@ -76,7 +76,10 @@ def cli(inputpath, outputpath, readme, docx, pdf, epub3):
             if format == "epub":
                 format = "epub3"
     extension = f".{format}"
-    compiler = get_compiler(text, format=format)
+    try:
+        compiler = get_compiler(text, format=format)
+    except ValueError as error:
+        raise click.UsageError(str(error))
 
     click.echo(f"{len(text)} Markdown files read.")
     if compiler.library:

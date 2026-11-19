@@ -29,7 +29,12 @@ def safe(s):
 class Document:
     "Document containing sections to write out as an EPUB3 format file."
 
-    def __init__(self, title, identifier, language="sv-SE", basic_style=False):
+    def __init__(self, title, identifier, language="sv", toc=True, basic_style=False):
+        """'title' and 'identifier' are required.
+        'language' is a ISO 639 language code.
+        'toc' indicates whether a table of contents is to be output.
+        'basic_style' if True includes a simple CSS stylesheet called 'basic'.
+        """
         self.title = title  # Dublin Core
         self.identifier = identifier  # Dublin Core
         self.language = language  # Dublin Core
@@ -45,18 +50,17 @@ class Document:
         self.styles = {}  # Key: name, value: CSS code.
         if basic_style:
             self.add_basic_style()
-        self.toc = True
-        self.toc_styles = (
-            True  # True: all styles used for TOC. Else list of style names.
-        )
+        self.toc = toc
+        # All styles used for TOC. Else list of style names.
+        self.toc_styles = True
         self.sections = {}  # Key: name, value: Section instance.
 
-    def add_style(self, name, css_content):
-        "Add the named style CSS file."
+    def add_style(self, name, css):
+        "Add the named style CSS code."
         assert isinstance(name, str)
         assert name == safe(name)
-        assert isinstance(css_content, str)
-        self.styles[name] = css_content
+        assert isinstance(css, str)
+        self.styles[name] = css
 
     def add_basic_style(self):
         "Add a style CSS file named 'basic', for convenience."

@@ -29,7 +29,7 @@ def read_texts(directory, supertext=None, ordinal=None):
         elif path.suffix == ".md":
             ordinal += 1
             Text(path, supertext=text, ordinal=ordinal)
-        else:                   # Skip other files.
+        else:  # Skip other files.
             pass
     return text
 

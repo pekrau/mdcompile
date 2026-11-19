@@ -46,7 +46,7 @@ class Element:
         self.write(
             outfile,
             indent=self.REPR_INDENT,
-            xml_decl=self.REPR_XML_DECL and self.depth == 0
+            xml_decl=self.REPR_XML_DECL and self.depth == 0,
         )
         return outfile.getvalue()
 
