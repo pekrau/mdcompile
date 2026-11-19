@@ -51,23 +51,28 @@ it will be compiled. The directory structure must be as follows:
 - The Markdown files and/or subdirectories in the each directory will be added
   to the document in lexicographic order by their names.
 
-The Markdown files may contain frontmatter in YAML format. All entries except
-for *title*, *subtitle* and *exclude* are effective only when provided in the
-top Markdown file for a document.
+The Markdown files may contain frontmatter in YAML dictionary format.
+The following entries are effective in all Markdown files:
 
 - *title*: The title of the document (if the top 'text.md' file) or title of the chapter
   or section. Default: the name of the file or directory.
 
 - *subtitle*: The subtitle of the document, chapter or section. Default: none.
 
+- *include*: List of all names of files and subdirectorites that are to
+be included as subsections. The order is significant.
+
+- *exclude*: A list of the names of files in the same directory that are to
+  be ignored.
+
+The following frontmatter entries are effective only when provided in the top
+Markdown file for a document:
+
 - *authors*: A list of strings giving the authors of the document or document. No default.
 
 - *language*: Default: 'sv-SE'.
 
 - *identifier*: A unique identifier for the document.
-
-- *exclude*: A list of strings giving the names of files in the same directory
-  that are to be ignored. Effective only in the 'text.md' file of a directory.
 
 - *footnotes-location*: One of 'document', 'chapter' or 'text', specifying
   where footnote definitions will be written. Default: 'text'

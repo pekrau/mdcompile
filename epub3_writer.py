@@ -6,7 +6,7 @@ TODO:
 - add image
 """
 
-__version__ = "0.5"
+__version__ = "0.6"
 
 __all__ = ["Document", "Section", "minixml", "__version__"]
 
@@ -130,16 +130,16 @@ p.codeblock {
         rootfile = result.create("rootfiles").create("rootfile")
         rootfile["media-type"] = "application/oebps-package+xml"
         rootfile["full-path"] = "OEBPS/content.opf"
-        return repr(result)
+        return result.output()
 
     def get_content_opf(self):
         "Return XML content for the 'content.opf' file."
-        root = minixml.Element(
+        document = minixml.Element(
             "package", xmlns="http://www.idpf.org/2007/opf", version="3.0"
         )
-        root["xmlns:dc"] = "http://purl.org/dc/elements/1.1/"
-        root["unique-identifier"] = "identifier"
-        metadata = root.create("metadata")
+        document["xmlns:dc"] = "http://purl.org/dc/elements/1.1/"
+        document["unique-identifier"] = "identifier"
+        metadata = document.create("metadata")
         metadata.create("dc:title", id="title").append(self.title)
         metadata.create("dc:identifier", id="identifier").append(self.identifier)
         metadata.create("dc:language").append(self.language)
@@ -166,7 +166,7 @@ p.codeblock {
         metadata.create("meta", property="dcterms:modified").append(
             dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         )
-        manifest = root.create("manifest")
+        manifest = document.create("manifest")
         if self.toc:
             item = manifest.create("item", id="toc", href="toc.xhtml", properties="nav")
             item["media-type"] = "application/xhtml+xml"
@@ -179,12 +179,12 @@ p.codeblock {
             )
             item["media-type"] = "application/xhtml+xml"
 
-        spine = root.create("spine")
+        spine = document.create("spine")
         if self.toc:
             spine.create("itemref", idref="toc")
         for section in self.get_all_sections():
             spine.create("itemref", idref=section.name)
-        return repr(root)
+        return document.output()
 
     def get_toc_xhtml(self):
         "Return the XHTML content for the TOC file."
@@ -216,7 +216,7 @@ p.codeblock {
             li = ol.create("li")
             li.create("a", href=f"{name}.xhtml").append(section.title)
             section.append_sections_list(li)
-        return repr(document)
+        return document.output()
 
     def write(self, outfile):
         "Write the EPUB3 file."
@@ -239,7 +239,7 @@ p.codeblock {
             if self.toc:
                 zip.writestr("OEBPS/toc.xhtml", self.get_toc_xhtml())
             for section in self.get_all_sections():
-                zip.writestr(f"OEBPS/{section.name}.xhtml", repr(section))
+                zip.writestr(f"OEBPS/{section.name}.xhtml", section.output())
 
 
 class Section:
@@ -271,8 +271,8 @@ class Section:
             self.append(content)
         self.subsections = {}
 
-    def __repr__(self):
-        "Return the XHTML file contents for this section."
+    def output(self):
+        "Return the XHTML for this section."
         document = minixml.Element("html", xmlns="http://www.w3.org/1999/xhtml")
         document["xmlns:epub"] = "http://www.idpf.org/2007/ops"
         head = document.create("head")
@@ -290,7 +290,7 @@ class Section:
                 "link", href=f"CSS/{style}.css", rel="stylesheet", type="text/css"
             )
         document.append(self.body)
-        return repr(document)
+        return document.output()
 
     def append(self, content):
         """The content is either an 'minixml.Element' instance or a string.

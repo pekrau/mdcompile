@@ -16,22 +16,21 @@ def read_texts(directory, supertext=None, ordinal=None):
     text = Text(
         directory / constants.TEXT_FILENAME, supertext=supertext, ordinal=ordinal
     )
+    exclude = set(text.frontmatter.get("exclude", []))
+    exclude.add(constants.TEXT_FILENAME)
+    exclude.add(constants.README_FILENAME)
+    include = text.frontmatter.get("include", sorted(directory.iterdir()))
+    include = [p for p in include if not (p.name.startswith(".") or p.name in exclude)]
     ordinal = 0
-    for path in sorted(directory.iterdir()):
-        if path.name == constants.TEXT_FILENAME:
-            continue
-        if path.name == constants.README_FILENAME:
-            continue
-        if path.name.startswith("."):
-            continue
-        if path.name in text.frontmatter.get("exclude", []):
-            continue
+    for path in include:
         if path.is_dir():
             ordinal += 1
             read_texts(path, supertext=text, ordinal=ordinal)
         elif path.suffix == ".md":
             ordinal += 1
             Text(path, supertext=text, ordinal=ordinal)
+        else:                   # Skip other files.
+            pass
     return text
 
 
@@ -54,7 +53,8 @@ class Text:
     "Read frontmatter and text from a Markdown (.md) file."
 
     def __init__(self, filepath, supertext=None, ordinal=None):
-        """Read the Markdown file, if it exists.
+        """Read the Markdown file.
+        If the file does not exist, frontmatter and content will empty.
         Parse the YAML into frontmatter.
         Convert the Markdown text into AST.
         Include into the supertext, if any.
@@ -80,7 +80,7 @@ class Text:
         self.footnotes = self.ast.pop("footnotes", {})
         self.subtexts = []
 
-    def __repr__(self):
+    def __str__(self):
         return f'Text("{self.filepath}")'
 
     def __len__(self):

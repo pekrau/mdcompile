@@ -37,16 +37,16 @@ class Element:
         return outfile.getvalue()
 
     def __repr__(self):
-        """Return the string representation of the element and all its children.
+        """Return the XML code for the element and all its children.
+        The XML code is indented according to the class variable REPR_INDENT.
         The XML declaration is included if the class variable REPR_XML_DECL is True
         and this element is the root (i.e. has no parent).
-        The output is indented according to the class variable REPR_INDENT.
         """
         outfile = io.StringIO()
         self.write(
             outfile,
             indent=self.REPR_INDENT,
-            xml_decl=self.REPR_XML_DECL and self.depth == 0,
+            xml_decl=self.REPR_XML_DECL and self.depth == 0
         )
         return outfile.getvalue()
 
@@ -223,9 +223,19 @@ class Element:
             elif child1 != child2:
                 return ("diff", child1, child2)
 
+    def output(self, indent=None):
+        """Return the XML code for the element and its children as a string.
+        The XML declaration is included if this element is the root
+        (i.e. has no parent).
+        """
+        assert indent is None or (isinstance(indent, int) and indent >= 0)
+        outfile = io.StringIO()
+        self.write(outfile, indent=indent, xml_decl=self.depth == 0)
+        return outfile.getvalue()
+
     def write(self, outfile, indent=None, xml_decl=False, encoding="utf-8"):
         "Write the XML of the element and its children into the open file object."
-        assert indent is None or isinstance(indent, int)
+        assert indent is None or (isinstance(indent, int) and indent >= 0)
         if xml_decl:
             outfile.write(f'<?xml version="1.0" encoding="{encoding}"?>\n')
         if indent is None:
