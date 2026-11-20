@@ -2,7 +2,7 @@
 
 import re
 
-VERSION = (0, 9, 1)
+VERSION = (0, 9, 2)
 __version__ = ".".join([str(n) for n in VERSION])
 
 FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)
@@ -14,8 +14,6 @@ DATETIME_ISOFORMAT = "%Y-%m-%d %H:%M"
 TEXT_FILENAME = "text.md"
 OUTPUT_FILENAME = "document"
 README_FILENAME = "README.md"
-CSS_FILENAME = "pico.min.css"
-CSS_URL = "https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
 
 MAX_LEVEL = 6
 
@@ -24,16 +22,40 @@ FOOTNOTES_CHAPTER = "chapter"
 FOOTNOTES_TEXT = "text"
 FOOTNOTES_LOCATIONS = [FOOTNOTES_BOOK, FOOTNOTES_CHAPTER, FOOTNOTES_TEXT]
 
+STANDARD_CSS = """body {
+  font-family: Helvetica, Arial, Verdana, sans-serif;
+  background-color: white;
+}
+blockquote {
+  font-family: Garamond, 'Times New Roman', serif;
+  margin: 2em;
+  padding-left: 1em;
+  border-left: 0.5em solid lightgray;
+}
+mark {
+  font-family: 'Courier New', monospace;
+  background-color: white;
+}
+p.codeblock {
+  font-family: 'Courier New', monospace;
+  margin-left: 3em;
+}
+a.internal {
+  color: darkgreen;
+}"""
+
 EXTERNAL_LINKS = dict(
     doi=("DOI", "https://doi.org/{value}"),
     pmid=("PubMed", "https://pubmed.ncbi.nlm.nih.gov/{value}"),
     isbn=("ISBN", "https://isbnsearch.org/isbn/{value}"),
 )
 
-SV_SE = "sv-SE"
+DEFAULT_LANGUAGE = "sv"
 
+# Lexicon key: code for language of translation.
+# Each dictionary has keys in English and values in the language of translation.
 LEXICON = {
-    SV_SE: {  # Key: 'en-GB' term; value: 'sv-SE' term.
+    "se": {
         "created": "skapad",
         "last modification": "senast ändrad",
         "contents": "innehåll",
@@ -45,6 +67,7 @@ LEXICON = {
         "title page": "titelsida",
     }
 }
-for k, v in list(LEXICON[SV_SE].items()):  # 'list': Avoid update collision issues.
-    # Add capitalized variants.
-    LEXICON[SV_SE][k.capitalize()] = v.capitalize()
+# Add capitalized terms.
+for language in LEXICON:
+    for key, value in list(LEXICON[language].items()):
+        LEXICON[language][key.capitalize()] = value.capitalize()

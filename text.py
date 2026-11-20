@@ -173,7 +173,7 @@ class Text:
 
     @property
     def language(self):
-        return self.frontmatter.get("language", constants.SV_SE)
+        return self.frontmatter.get("language", constants.DEFAULT_LANGUAGE)
 
     def elements(self):
         "Return an iterator over the AST elements of this text."

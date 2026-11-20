@@ -5,14 +5,14 @@ Compile Markdown file(s) to DOCX, PDF and EPUB3. With extensions for
 hierarchy, footnotes, indexed terms and references.
 
 ```
-Usage: mdc.py [OPTIONS] [INPUTPATH] [OUTPUTPATH]
+Usage: mdcompile.py [OPTIONS] [INPUTPATH] [OUTPUTPATH]
 
   Command-line script to compile Markdown file(s).
 
 Positional arguments:
   [INPUTPATH]   Directory or Markdown file to compile. If directory, assumes
                 the existence of the file 'text.md' in it.
-  [OUTPUTPATH]  Optional output file path. Computed from INPUTPATH if not
+  [OUTPUTPATH]  Output file path (optional). Computed from INPUTPATH if not
                 given. The file extension, if given, determines the output
                 format.
 

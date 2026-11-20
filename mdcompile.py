@@ -55,7 +55,7 @@ class Timer:
     "outputpath",
     default=None,
     type=click.Path(exists=False, path_type=pathlib.Path),
-    help="Optional output file path. Computed from INPUTPATH if not given. The file extension, if given, determines the output format.",
+    help="Output file path (optional). Computed from INPUTPATH if not given. The file extension, if given, determines the output format.",
 )
 def cli(inputpath, outputpath, readme, docx, pdf, epub3):
     "Command-line script to compile Markdown file(s)."

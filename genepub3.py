@@ -97,7 +97,7 @@ p.codeblock {
 
     def add_section(self, section):
         """Add a Section instance having name, title, styles and XHTML content.
-        The order of addition is significant.
+        The order of addition is significant for the TOC.
         """
         assert isinstance(section, Section)
         assert section.document is None
@@ -110,7 +110,7 @@ p.codeblock {
         section.document = self
 
     def get_all_names(self):
-        "Get all names for all sections and their subsections, recursively."
+        "Get names for all sections and their subsections, recursively."
         result = []
         for section in self.sections.values():
             result.extend(section.get_all_names())
@@ -125,7 +125,7 @@ p.codeblock {
         return result
 
     def get_container_xml(self):
-        "Return XML content for 'container.xml' file."
+        "Return XML content for the 'container.xml' file."
         result = minixml.Element(
             "container",
             version="1.0",
@@ -191,7 +191,7 @@ p.codeblock {
         return document.output()
 
     def get_toc_xhtml(self):
-        "Return the XHTML content for the TOC file."
+        "Return the XHTML content for the TOC."
         assert self.toc
         document = minixml.Element("html", xmlns="http://www.w3.org/1999/xhtml")
         document["xmlns:epub"] = "http://www.idpf.org/2007/ops"
@@ -251,12 +251,12 @@ class Section:
 
     def __init__(self, title, add_title=1, name=None, content=None, styles=True):
         """'title' must be unique in the document.
-        It is output as a 'title' element in 'html' 'head'.
+        It is output as a 'title' element in XHTML 'head' element.
         If 'add_title' is non-zero, 'title' is output in an 'h' element as
-        the first element in the 'body' preceding any content.
+        the first element in the 'body' element preceding any content.
         If 'name' is provided, it must be safe.
-        If 'styles' is True, then use all styles defined for its document.
-        If 'styles' is a string, then use only those (comma-delimited).
+        If 'styles' is True, then use all styles defined for the containing Document.
+        If 'styles' is a string (whitespace delimited), then use only those.
         """
         assert title
         assert name is None or (name == safe(name))
@@ -297,10 +297,10 @@ class Section:
         return document.output()
 
     def append(self, content):
-        """The content is either an 'minixml.Element' instance or a string.
-        If a string, then it will be parsed using 'minixml.parse'.
+        """The 'content' is either an 'minixml.Element' instance or a string.
+        If a string, then it will be parsed using 'minixml.parse'. It must be valid XHTML.
         The content must *not* contain the 'html', 'head' and 'body' elements; these
-        elements are wrapped around the content, which must be valid XHTML.
+        elements are wrapped around the content.
         """
         if isinstance(content, str):
             for elem in list(minixml.parse(f"<tmp>{content}</tmp>").children):
@@ -311,7 +311,7 @@ class Section:
             raise ValueError(f"invalid content type: {type(content)}")
 
     def add_section(self, section):
-        "Add a subsection. The order of addition is significant."
+        "Add a subsection. The order of addition is significant for the TOC."
         assert isinstance(section, Section)
         assert section.document is None
         if self.document is None:

@@ -5,7 +5,7 @@ import pathlib
 from xml.sax.saxutils import escape
 
 import constants
-import epub3_writer as epub3
+import genepub3 as epub3
 import utils
 from compiler import Compiler
 
@@ -18,30 +18,7 @@ class Epub3Compiler(Compiler):
         self.document = epub3.Document(
             self.text.title, self.text.identifier, self.text.language
         )
-        self.document.add_style(
-            "standard",
-            """body {
-  font-family: Helvetica, Arial, Verdana, sans-serif;
-  background-color: white;
-}
-blockquote {
-  font-family: Garamond, 'Times New Roman', serif;
-  margin: 2em;
-  padding-left: 1em;
-  border-left: 0.5em solid lightgray;
-}
-mark {
-  font-family: 'Courier New', monospace;
-  background-color: white;
-}
-p.codeblock {
-  font-family: 'Courier New', monospace;
-  margin-left: 3em;
-}
-a.internal {
-  color: darkgreen;
-}""",
-        )
+        self.document.add_style("standard", constants.STANDARD_CSS)
         self.document.creators.extend(self.text.authors)
         self.document.subject = self.text.frontmatter.get("subject")
         self.document.contributors.append(f"mdcompile {constants.__version__}")
