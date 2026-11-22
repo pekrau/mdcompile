@@ -17,8 +17,8 @@ def safe(s, casefold=True):
     return "".join([c if c in SAFE_CHARACTERS else "-" for c in result])
 
 
-def isoformat(datetime=None):
-    "ISO format date, no seconds."
+def timeformat(datetime=None):
+    "ISO format date without seconds."
     if datetime is None:
         datetime = dt.datetime.now()
-    return datetime.strftime(constants.DATETIME_ISOFORMAT)
+    return datetime.strftime("%Y-%m-%d %H:%M")

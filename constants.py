@@ -2,14 +2,12 @@
 
 import re
 
-VERSION = (0, 9, 2)
+VERSION = (0, 9, 3)
 __version__ = ".".join([str(n) for n in VERSION])
 
 FRONTMATTER = re.compile(r"^---([\n\r].*?[\n\r])---[\n\r](.*)$", re.DOTALL)
 
 EM_DASH = "\u2014"
-
-DATETIME_ISOFORMAT = "%Y-%m-%d %H:%M"
 
 TEXT_FILENAME = "text.md"
 OUTPUT_FILENAME = "document"
@@ -22,28 +20,6 @@ FOOTNOTES_CHAPTER = "chapter"
 FOOTNOTES_TEXT = "text"
 FOOTNOTES_LOCATIONS = [FOOTNOTES_BOOK, FOOTNOTES_CHAPTER, FOOTNOTES_TEXT]
 
-STANDARD_CSS = """body {
-  font-family: Helvetica, Arial, Verdana, sans-serif;
-  background-color: white;
-}
-blockquote {
-  font-family: Garamond, 'Times New Roman', serif;
-  margin: 2em;
-  padding-left: 1em;
-  border-left: 0.5em solid lightgray;
-}
-mark {
-  font-family: 'Courier New', monospace;
-  background-color: white;
-}
-p.codeblock {
-  font-family: 'Courier New', monospace;
-  margin-left: 3em;
-}
-a.internal {
-  color: darkgreen;
-}"""
-
 EXTERNAL_LINKS = dict(
     doi=("DOI", "https://doi.org/{value}"),
     pmid=("PubMed", "https://pubmed.ncbi.nlm.nih.gov/{value}"),
@@ -55,7 +31,7 @@ DEFAULT_LANGUAGE = "sv"
 # Lexicon key: code for language of translation.
 # Each dictionary has keys in English and values in the language of translation.
 LEXICON = {
-    "se": {
+    "sv": {
         "created": "skapad",
         "last modification": "senast ändrad",
         "contents": "innehåll",

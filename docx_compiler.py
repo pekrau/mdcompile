@@ -2,7 +2,6 @@
 
 import datetime as dt
 import os
-import pathlib
 
 import docx
 import docx.oxml
@@ -11,15 +10,17 @@ import docx.styles.style
 from docx.enum.style import WD_STYLE_TYPE
 
 import constants
-import utils
 from compiler import Compiler
+import utils
 
 
 class DocxCompiler(Compiler):
     "Compile to DOCX format."
 
-    def write_setup(self):
+    def write_initialize(self, output_filepath):
         "Set up the the DOCX document."
+        self.output_filepath = output_filepath.with_suffix(".docx")
+
         self.doc = docx.Document()
 
         # Set the default document-wide language.
@@ -111,6 +112,9 @@ class DocxCompiler(Compiler):
         run._r.append(instrText)
         run._r.append(fldChar2)
 
+        # Initial values.
+        self.within_footnote = None
+
     def write_title_page(self):
         "Write the title page. If no subtexts, this is all content except references."
         paragraph = self.doc.add_paragraph(style="Title 0")
@@ -129,10 +133,9 @@ class DocxCompiler(Compiler):
             paragraph.add_run(rights)
         paragraph = self.doc.add_paragraph(style="Normal")
         paragraph.add_run(
-            f'{self.tx("Last modification")}: {utils.isoformat(self.text.modified)}'
+            f'{self.tx("Last modification")}: {utils.timeformat(self.text.modified)}'
         ).font.italic = True
         paragraph.paragraph_format.space_after = docx.shared.Pt(30)
-        self.within_footnote = False
         self.render(self.text.ast, level=3)
         self.write_footnotes_text(self.text)
 
@@ -172,21 +175,20 @@ class DocxCompiler(Compiler):
                 paragraph.paragraph_format.left_indent = docx.shared.Pt(15)
                 paragraph.add_run(self.tx("Footnotes"))
 
-        # Write TOC entries for book footnotes, references and indexed, if any such.
+        # Write TOC entries for book footnotes, references and index, if any such.
         if self.text.footnotes and self.footnotes_location == constants.FOOTNOTES_BOOK:
             self.doc.add_paragraph(self.tx("Footnotes"), style="Body Text")
         if self.referenced:
             self.doc.add_paragraph(self.tx("References"), style="Body Text")
-        if self.indexed:
+        if self.index_terms:
             self.doc.add_paragraph(self.tx("Index"), style="Body Text")
 
-    def write_text_setup(self, text):
+    def write_text_initialize(self, text):
         "Set up for the next text."
         self.doc.add_page_break()
-        self.write_heading(text.ordinal_title, text.level)
 
     def write_footnotes_chapter(self, text):
-        "Write out footnotes for the chapter, if that mode, and any footnotes."
+        "Write out footnotes for the chapter, if that mode and any footnotes."
         if not text.footnotes:
             return
         if not self.footnotes_location == constants.FOOTNOTES_CHAPTER:
@@ -197,7 +199,7 @@ class DocxCompiler(Compiler):
         self.write_footnotes(text)
 
     def write_footnotes_book(self):
-        "Write out footnotes for the book, if that mode, and any footnotes."
+        "Write out footnotes for the book, if that mode and any footnotes."
         if not self.text.footnotes:
             return
         if not self.footnotes_location == constants.FOOTNOTES_BOOK:
@@ -291,14 +293,14 @@ class DocxCompiler(Compiler):
             if accessed := reference.get("accessed"):
                 paragraph.add_run(f" ({self.tx('accessed')} {accessed})")
 
-    def write_indexed(self):
-        "Write the index section, if any indexed terms. Only for book."
-        if not self.indexed:
+    def write_index(self):
+        "Write the index section, if any index terms. Only for book."
+        if not self.index_terms:
             return
         self.doc.add_page_break()
         paragraph = self.doc.add_paragraph(style="Title 1")
         paragraph.add_run(self.tx("Index"))
-        items = sorted(self.indexed.items(), key=lambda i: i[0].casefold())
+        items = sorted(self.index_terms.items(), key=lambda i: i[0].casefold())
         for canonical, texts in items:
             paragraph = self.doc.add_paragraph(canonical, style="Body Text")
             paragraph.paragraph_format.keep_with_next = True
@@ -311,11 +313,9 @@ class DocxCompiler(Compiler):
                     paragraph.paragraph_format.keep_with_next = True
             paragraph.paragraph_format.space_after = docx.shared.Pt(8)
 
-    def write_to_file(self, output_filepath):
+    def write_finalize(self):
         "Write the DOCX contents to file."
-        output_filepath = pathlib.Path(output_filepath.with_suffix(".docx"))
-        self.doc.save(str(output_filepath))
-        return output_filepath
+        self.doc.save(str(self.output_filepath))
 
     def render_document(self, ast):
         self.list_stack = []
@@ -334,12 +334,14 @@ class DocxCompiler(Compiler):
         paragraph.add_run(ast["children"][0]["children"])
 
     def render_paragraph(self, ast):
-        # NOTE: this flag may have value -True, denoting continued definition.
-        if (
-            self.within_footnote == False
-        ):  # If footnote started, then paragraph created.
-            self.current_paragraph = self.doc.add_paragraph()
-
+        self.current_paragraph = self.doc.add_paragraph()
+        if fn := self.within_footnote:
+            self.current_paragraph.paragraph_format.left_indent = docx.shared.Pt(15)
+            self.current_paragraph.paragraph_format.first_line_indent = docx.shared.Pt(-15)
+            if not fn.get("started"):
+                run = self.current_paragraph.add_run(f"{fn['number']}. ")
+                run.font.bold = True
+                fn["started"] = True
         # Handle list special case.
         if self.list_stack:
             data = self.list_stack[-1]
@@ -368,9 +370,8 @@ class DocxCompiler(Compiler):
         # Prepend paragraph number.
         if self.paragraph_number is not None:
             self.paragraph_number += 1
-            self.current_paragraph.add_run(f"({self.paragraph_number}) ").style = (
-                self.doc.styles["Intense Quote Char"]
-            )
+            run = self.current_paragraph.add_run(f"({self.paragraph_number}) ")
+            run.style = self.doc.styles["Intense Quote Char"]
 
         for child in ast["children"]:
             self.render(child)
@@ -395,9 +396,8 @@ class DocxCompiler(Compiler):
         self.style_stack.pop()
 
     def render_code_span(self, ast):
-        self.current_paragraph.add_run(ast["children"]).style = self.doc.styles[
-            "Macro Text Char"
-        ]
+        run = self.current_paragraph.add_run(ast["children"])
+        run.style = self.doc.styles["Macro Text Char"]
 
     def render_code_block(self, ast):
         self.current_paragraph = self.doc.add_paragraph(style="Code")
@@ -405,9 +405,6 @@ class DocxCompiler(Compiler):
         for child in ast["children"]:
             self.render(child)
         self.style_stack.pop()
-
-    def render_fenced_code(self, ast):
-        self.render_code_block(ast)
 
     def render_emphasis(self, ast):
         self.italic = True
@@ -484,15 +481,7 @@ class DocxCompiler(Compiler):
         run = self.current_paragraph.add_run(str(ast["number"]))
         run.font.superscript = True
         run.font.bold = True
-
-    def render_footnote_def_setup(self, ast):
-        "Setup the footnote rendering; output number."
-        self.current_paragraph = self.doc.add_paragraph()
-        self.current_paragraph.paragraph_format.left_indent = docx.shared.Pt(15)
-        self.current_paragraph.paragraph_format.first_line_indent = docx.shared.Pt(-15)
-        run = self.current_paragraph.add_run(f"{ast['number']}.")
-        run.font.bold = True
-        self.current_paragraph.add_run(" ")
+        run.font.underline = True
 
     def render_reference(self, ast):
         run = self.current_paragraph.add_run(ast["name"])

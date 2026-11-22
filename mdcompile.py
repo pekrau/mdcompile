@@ -16,6 +16,7 @@ import constants
 from docx_compiler import DocxCompiler
 from pdf_compiler import PdfCompiler
 from epub3_compiler import Epub3Compiler
+from html_compiler import HtmlCompiler
 from text import read_texts, Text
 
 
@@ -42,9 +43,10 @@ class Timer:
     cls=MutuallyExclusiveOptionGroup,
     help="Formats to compile Markdown into. Overridden by an explicit extension in OUTPUTPATH.",
 )
-@optgroup.option("--docx", "-d", is_flag=True, help="DOCX format (default).")
-@optgroup.option("--pdf", "-p", is_flag=True, help="PDF format.")
-@optgroup.option("--epub3", "-e", is_flag=True, help="EPUB3 format.")
+@optgroup.option("--docx", "-D", is_flag=True, help="DOCX format (default).")
+@optgroup.option("--pdf", "-P", is_flag=True, help="PDF format.")
+@optgroup.option("--epub3", "-E", is_flag=True, help="EPUB3 format.")
+@optgroup.option("--html", "-H", is_flag=True, help="HTML format.")
 @click.argument(
     "inputpath",
     default=None,
@@ -57,7 +59,7 @@ class Timer:
     type=click.Path(exists=False, path_type=pathlib.Path),
     help="Output file path (optional). Computed from INPUTPATH if not given. The file extension, if given, determines the output format.",
 )
-def cli(inputpath, outputpath, readme, docx, pdf, epub3):
+def cli(inputpath, outputpath, readme, docx, pdf, epub3, html):
     "Command-line script to compile Markdown file(s)."
     timer = Timer()
     click.echo(f"mdc {constants.__version__}")
@@ -69,7 +71,7 @@ def cli(inputpath, outputpath, readme, docx, pdf, epub3):
     else:
         text = Text(inputpath)
 
-    format = "epub3" if epub3 else "pdf" if pdf else "docx"
+    format = "html" if html else "epub3" if epub3 else "pdf" if pdf else "docx"
     if outputpath:
         if extension := outputpath.suffix.lower():
             format = extension.lstrip(".")
@@ -97,7 +99,7 @@ def cli(inputpath, outputpath, readme, docx, pdf, epub3):
         filepath = compiler.write(outputpath.with_suffix(extension))
     except (ValueError, IOError) as error:
         raise click.UsageError(str(error))
-    click.echo(f"{len(compiler.indexed)} terms indexed.")
+    click.echo(f"{len(compiler.index_terms)} terms indexed.")
 
     if compiler.paragraph_number is not None:
         click.echo(f"{compiler.paragraph_number} paragraphs.")
@@ -118,6 +120,8 @@ def get_compiler(text, format="docx"):
             compiler = PdfCompiler(text)
         case "epub3":
             compiler = Epub3Compiler(text)
+        case "html":
+            compiler = HtmlCompiler(text)
         case "docx":
             compiler = DocxCompiler(text)
         case _:

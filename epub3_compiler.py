@@ -1,24 +1,47 @@
 "Compile Markdown file(s) to EPUB3."
 
-import datetime as dt
-import pathlib
-from xml.sax.saxutils import escape
-
 import constants
+from compiler import Compiler
 import genepub3 as epub3
 import utils
-from compiler import Compiler
+from html_mixin import HtmlMixin
 
 
-class Epub3Compiler(Compiler):
+class Epub3Compiler(HtmlMixin, Compiler):
     "Compile Markdown file(s) to EPUB3."
 
-    def write_setup(self):
+    STANDARD_CSS = """body {
+  font-family: Helvetica, Arial, sans-serif;
+  background-color: white;
+}
+blockquote {
+  font-family: Garamond, 'Times New Roman', serif;
+  margin: 2em;
+  padding-left: 1em;
+  border-left: 0.5em solid lightgray;
+}
+mark {
+  font-family: 'Courier New', monospace;
+  background-color: white;
+}
+pre.codeblock {
+  margin-left: 3em;
+}
+ol.toc {
+  list-style: none;
+}
+a.contrast {
+  color: black;
+}"""
+
+    def write_initialize(self, output_filepath):
         "Set up the EPUB3 document."
+        self.output_filepath = output_filepath.with_suffix(".epub")
+
         self.document = epub3.Document(
             self.text.title, self.text.identifier, self.text.language
         )
-        self.document.add_style("standard", constants.STANDARD_CSS)
+        self.document.add_style("standard", self.STANDARD_CSS)
         self.document.creators.extend(self.text.authors)
         self.document.subject = self.text.frontmatter.get("subject")
         self.document.contributors.append(f"mdcompile {constants.__version__}")
@@ -28,61 +51,34 @@ class Epub3Compiler(Compiler):
         self.document.publisher = self.text.frontmatter.get("publisher")
         self.document.rights = self.text.frontmatter.get("rights")
         self.document.date = self.text.modified.isoformat()
+
+        # Initial values.
         self.stack = []
+        self.within_footnote = None
 
-    def push(self):
-        self.stack.append([])
-
-    def append(self, content):
-        self.stack[-1].append(content)
-
-    def pop(self):
-        content = "".join(self.stack.pop())
-        if self.stack:
-            self.stack[-1].append(content)
-        else:
-            self.current_section.append(content)
-
-    def write_heading(self, heading, level, target=None):
-        "Write heading at the specified level."
-        level = min(level, constants.MAX_LEVEL)
-        self.push()
-        self.append(f"<h{level}>{escape(heading)}</h{level}>")
-        self.pop()
+    def write_toc(self):
+        "Set up TOC. Not needed; 'self.document.write' generates the TOC."
+        pass
 
     def write_title_page(self):
         "Write the title page. If no subtexts, this is all content except references."
         title = self.tx("Title page") if self.text.subtexts else self.text.title
         self.current_section = epub3.Section(title, add_title=False)
         self.document.add_section(self.current_section)
-        self.push()
-        self.append(f"<h1>{escape(self.text.title)}</h1>")
-        if self.text.subtitle:
-            self.append(f"<h2>{escape(self.text.subtitle)}</h2>")
-        self.append(f'<h3>{"<br/>".join(self.text.authors)}</h3>')
-        if rights := self.text.frontmatter.get("rights"):
-            self.append(f"<p>{rights}</p>")
-        self.append(
-            f"<p><em>{self.tx('Last modification')}: {utils.isoformat(self.text.modified)}</em></p>"
-        )
-        self.pop()
-        self.render(self.text.ast, level=3)
-        self.write_footnotes_text(self.text)
+        self.stack = [self.current_section.body]
+        super().write_title_page()
 
-    def write_toc(self):
-        "Set up TOC. Done automatically by 'epub3.write'"
-        pass
-
-    def write_text_setup(self, text):
-        "Set up for the next text. Output the text title. Record section for TOC."
+    def write_text_initialize(self, text):
+        "Set up for the next text. Outputs the text title. Adds section to TOC."
         title = text.ordinal_title
         self.current_section = text.section = epub3.Section(
-            title, add_title=text.level, name=text.identifier
+            title, add_title=False, name=text.identifier
         )
         if text.supertext is self.text:  # First-level subtext; chapter.
             self.document.add_section(self.current_section)
         else:
             text.supertext.section.add_section(self.current_section)
+        self.stack = [self.current_section.body]
 
     def write_footnotes_chapter(self, text):
         "Write out footnotes for the chapter, if that mode and any footnotes."
@@ -95,16 +91,18 @@ class Epub3Compiler(Compiler):
         )
         sections = list(self.document.sections.values())
         sections[-1].add_section(self.current_section)
+        self.stack = [self.current_section.body]
         self.write_footnotes(text)
 
     def write_footnotes_book(self):
-        "Write out footnotes for the book, if that mode, and any footnotes."
+        "Write out footnotes for the book, if that mode and any footnotes."
         if not self.text.footnotes:
             return
         if not self.footnotes_location == constants.FOOTNOTES_BOOK:
             return
         self.current_section = epub3.Section(self.tx("Footnotes"))
         self.text.section.add_section(self.current_section)
+        self.stack = [self.current_section.body]
         self.write_footnotes(self.text)
 
     def write_references(self):
@@ -114,290 +112,60 @@ class Epub3Compiler(Compiler):
             if self.text.subtexts:  # Book; references in a separate section.
                 self.current_section = epub3.Section(title)
                 self.document.add_section(self.current_section)
+                self.stack = [self.current_section.body]
             else:  # Essay; references after the text; no new section.
                 self.references_section = None
-                self.push()
-                self.append(f"<h3>{title}</h3>")
-                self.pop()
+                with self.push("h3"):
+                    self.append(title)
+            self.write_references_entries()
         else:
             self.references_section = None
-            return
-        for name, reference in sorted(self.referenced.items()):
-            self.push()
-            self.append("<p>")
-            self.append(f'<a id="{utils.safe(name)}"/>')
-            # Authors.
-            count = len(reference["authors"])
-            for pos, author in enumerate(reference["authors"]):
-                if pos > 0:
-                    if pos == count - 1:
-                        self.append(escape(" & "))
-                    else:
-                        self.append(", ")
-                self.append(author)
-            self.append(". ")
-            # Original publication year.
-            self.append(reference["year"])
-            self.append(". ")
-            # Title and bibliographic data according to publication type.
-            try:
-                method = getattr(self, f"write_reference_{reference['type']}")
-            except AttributeError:
-                raise ValueError(f"unknown reference type {reference['type']}")
-            else:
-                method(reference)
-            # External link.
-            if url := reference.get("url"):
-                self.append(f' <a href="{url}">{escape(url)}</a>')
-            # Cross-references to other databases.
-            for key, (label, template) in constants.EXTERNAL_LINKS.items():
-                try:
-                    value = reference[key]
-                    text = f"{label}:{value}"
-                    url = template.format(value=value)
-                    self.append(f' <a href="{url}">{escape(text)}</a>')
-                except KeyError:
-                    pass
-            self.append("</p>")
-            self.pop()
 
-    def write_reference_article(self, reference):
-        "Write data for reference of type 'article'."
-        self.append(reference["title"].rstrip("."))
-        self.append(".")
-        if journal := reference.get("journal"):
-            self.append(f" <em>{escape(journal)}</em>")
-        if volume := reference.get("volume"):
-            self.append(f" <em>{escape(volume)}</em>")
-        if issue := reference.get("number"):
-            self.append(f" ({escape(issue)})")
-        if pages := reference.get("pages"):
-            self.append(", ")
-            self.append(escape(pages.replace("--", "-")))
-        self.append(".")
-
-    def write_reference_book(self, reference):
-        "Write data for reference of type 'book'."
-        self.append(f"<em>{reference['title'].rstrip('.')}</em>,")
-        if publisher := reference.get("publisher"):
-            self.append(" ")
-            self.append(escape(publisher))
-        if published := reference.get("published"):
-            published = published.split("-")[0]
-            if published != reference.get("year"):
-                self.append(" ")
-                self.append(published)
-        self.append(".")
-
-    def write_reference_post(self, reference):
-        "Write data for reference of type 'post'."
-        self.append(f"{reference['title'].rstrip('.')}.")
-        if published := reference.get("published"):
-            self.append(f" {self.tx('published')} {published}")
-        if href := reference.get("href"):
-            self.append(f' <a href="{href}">{escape(href)}</a>')
-            if accessed := reference.get("accessed"):
-                self.append(f" ({self.tx('accessed')} {accessed})")
-        self.append(".")
-
-    def write_indexed(self):
-        "Write the index section, if any indexed terms. Only for book."
-        if not self.indexed:
+    def write_index(self):
+        "Write the index section, if any index terms. Only for book."
+        if not self.index_terms:
             return
         self.current_section = epub3.Section(self.tx("Index"))
         self.document.add_section(self.current_section)
-        self.push()
-        items = sorted(self.indexed.items(), key=lambda i: i[0].casefold())
-        for canonical, texts in items:
-            self.push()
-            self.append("<dl>")
-            self.append(
-                f'<dt><a id="{utils.safe(canonical)}"/>{escape(canonical)}</dt>'
-            )
-            self.append("<dd>")
-            for text in texts:
-                self.append(
-                    f'<a href="{text.identifier}.xhtml#{utils.safe(canonical)}">{escape(text.ordinal_title)}</a>'
-                )
-                if text is not texts[-1]:
-                    self.append("<br/>")
-            self.append("</dd></dl>")
-            self.pop()
-        self.pop()
+        self.stack = [self.current_section.body]
+        self.write_index_entries()
 
-    def write_to_file(self, output_filepath):
+    def write_finalize(self):
         "Write the EPUB3 contents to file."
-        output_filepath = pathlib.Path(output_filepath.with_suffix(".epub"))
-        self.document.write(output_filepath)
-        return output_filepath
-
-    def render_document(self, ast):
-        "Render the contents of the text."
-        self.within_footnote = False
-        self.push()
-        for child in ast["children"]:
-            self.render(child)
-        self.pop()
-        assert not self.stack
-
-    def render_heading(self, ast):
-        level = min(self.level + ast["level"], constants.MAX_LEVEL)
-        self.push()
-        self.append(f"<h{level}>")
-        for child in ast["children"]:
-            self.render(child)
-        self.append(f"</h{level}>")
-        self.pop()
-
-    def render_paragraph(self, ast):
-        # NOTE: this flag may have value -1, denoting continued definition.
-        if (
-            self.within_footnote == False
-        ):  # If footnote started, then paragraph created.
-            self.push()
-            self.append("<p>")
-        if self.paragraph_number is not None:
-            self.paragraph_number += 1
-            self.append(f"<mark>({self.paragraph_number})</mark> ")
-        for child in ast["children"]:
-            self.render(child)
-        self.append("</p>")
-        self.pop()
-
-    def render_raw_text(self, ast):
-        self.append(escape(ast["children"]))
-
-    def render_quote(self, ast):
-        self.push()
-        self.append("<blockquote>")
-        for child in ast["children"]:
-            self.render(child)
-        self.append("</blockquote>")
-        self.pop()
-
-    def render_code_span(self, ast):
-        self.append(f'<code>{escape(ast["children"])}</code>')
+        self.document.write(self.output_filepath)
 
     def render_code_block(self, ast):
-        # The <pre> element does not seem to work in common EPUB3 readers?
-        # This is a workaround.
-        self.push()
-        self.append('<p class="codeblock">')
-        for child in ast["children"]:
-            self.render(child)
-        self.append("</p>")
-        self.stack[-1] = ["<br/>".join("".join(self.stack[-1]).split("\n"))]
-        self.pop()
+        "Render a block of code. It appears that EPUB3 and HTML disagree on this."
+        with self.push("pre") as pre:
+            pre["class"] = "codeblock"
+            with self.push("code"):
+                for child in ast["children"]:
+                    self.render(child)
 
-    def render_fenced_code(self, ast):
-        self.render_code_block(ast)
+    def get_footnote_href(self, ast):
+        "Href to the footnote definition in EPUB3 format."
+        return f"{ast['text'].identifier}-footnotes.xhtml#{ast['identifier']}"
 
-    def render_emphasis(self, ast):
-        self.push()
-        self.append("<em>")
-        for child in ast["children"]:
-            self.render(child)
-        self.append("</em>")
-        self.pop()
+    def get_reference_id(self, name):
+        "Id for the reference in EPUB3 format."
+        return utils.safe(name)
 
-    def render_strong_emphasis(self, ast):
-        self.push()
-        self.append("<strong>")
-        for child in ast["children"]:
-            self.render(child)
-        self.append("</strong>")
-        self.pop()
+    def get_reference_href(self, ast):
+        "Href to the reference in EPUB3 format."
+        return f"{self.tx('References')}.xhtml#{self.get_reference_id(ast['name'])}"
 
-    def render_subscript(self, ast):
-        self.push()
-        self.append("<sub>")
-        for child in ast["children"]:
-            self.render(child)
-        self.append("</sub>")
-        self.pop()
+    def get_index_id(self, canonical):
+        "Id for the index entry."
+        return utils.safe(canonical)
 
-    def render_superscript(self, ast):
-        self.push()
-        self.append("<sup>")
-        for child in ast["children"]:
-            self.render(child)
-        self.append("</sup>")
-        self.pop()
+    def get_index_href(self, canonical):
+        "Href to the index entry."
+        return f"{self.tx('Index')}.xhtml#{self.get_index_id(canonical)}"
 
-    def render_emdash(self, ast):
-        self.append(constants.EM_DASH)
+    def get_indexed_id(self, canonical):
+        "Id for the index term in the text."
+        return utils.safe(canonical)
 
-    def render_line_break(self, ast):
-        if ast.get("soft"):
-            self.append(" ")
-        else:
-            self.append("<br/>")
-
-    def render_thematic_break(self, ast):
-        self.append('<hr style="width: 60%;"/>')
-
-    def render_link(self, ast):
-        self.push()
-        self.append(f'<a href="{ast["dest"]}">')
-        for child in ast["children"]:
-            self.render(child)
-        self.append("</a>")
-        self.pop()
-
-    def render_list(self, ast):
-        self.push()
-        if ast["ordered"]:
-            self.append("<ol>")
-        else:
-            self.append("<ul>")
-        for child in ast["children"]:
-            self.render(child)
-        if ast["ordered"]:
-            self.append("</ol>")
-        else:
-            self.append("</ul>")
-        self.pop()
-
-    def render_list_item(self, ast):
-        self.push()
-        self.append("<li>")
-        for child in ast["children"]:
-            self.render(child)
-        self.append("</li>")
-        self.pop()
-
-    def render_indexed(self, ast):
-        self.append("<a ")
-        # Disallow multiple indexing of the same term in a text.
-        if not ast.get("multiple"):
-            id = f"{utils.safe(ast['canonical'])}"
-            self.append(f'id="{id}" ')
-        href = f"{self.tx('Index')}.xhtml#{utils.safe(ast['canonical'])}"
-        self.append(f'href="{href}" class="internal">{escape(ast["term"])}</a>')
-
-    def render_footnote_ref(self, ast):
-        href = f"{ast['text'].identifier}-footnotes.xhtml#{ast['identifier']}"
-        self.append(f'<sup><a href="{href}">{ast["number"]}</a></sup>')
-
-    def render_footnote_def_setup(self, ast):
-        "Setup the footnote rendering; output number."
-        self.push()
-        self.append("<p>")
-        id = f"{ast['identifier']}"
-        self.append(f'<a id="{id}"/><strong>{ast["number"]}.</strong> ')
-        self.within_footnote = -1
-
-    def render_reference(self, ast):
-        self.push()
-        self.append(
-            f'<a href="{self.tx("References")}.xhtml#{utils.safe(ast["name"])}" class="internal">{escape(ast["name"])}</a>'
-        )
-        if self.reference_title:
-            self.append(": ")
-            reference = self.referenced[ast["name"]]
-            if self.reference_title_italic:
-                self.append("<em>")
-            self.append(escape(reference["title"]))
-            if self.reference_title_italic:
-                self.append("</em>")
-        self.pop()
+    def get_indexed_href(self, text, canonical):
+        "Href to the indexed term in the text."
+        return f"{text.identifier}.xhtml#{self.get_indexed_id(canonical)}"

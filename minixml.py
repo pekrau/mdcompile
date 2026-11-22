@@ -13,8 +13,15 @@ from xml.sax.saxutils import quoteattr, escape, unescape
 class Element:
     "XML element having a tag, attributes, parent (if any) and children (if any)."
 
-    REPR_INDENT = 2  # Indentation to use for repr().
-    REPR_XML_DECL = True  # repr() outputs XML declaration if the element is root.
+    # If truthy value, output first if the element is root (i.e has no parent). For 'repr()'.
+    REPR_DECL = '<?xml version="1.0" encoding="utf-8"?>'
+
+    # Indentation to use for 'repr()'.
+    REPR_INDENT = 2
+
+    # If this is set to True, then an empty element ends in ">", not "/>".
+    # This would be appropriate for HTML5, but not for XHMTL.
+    HTML = False
 
     def __init__(self, tag, *children, **attrs):
         self.tag = tag
@@ -32,6 +39,8 @@ class Element:
             outfile.write(f" {name}={quoteattr(value)}")
         if len(self):
             outfile.write(">")
+        elif self.HTML:
+            outfile.write(">")
         else:
             outfile.write("/>")
         return outfile.getvalue()
@@ -39,14 +48,14 @@ class Element:
     def __repr__(self):
         """Return the XML code for the element and all its children.
         The XML code is indented according to the class variable REPR_INDENT.
-        The XML declaration is included if the class variable REPR_XML_DECL is True
+        The class variable REPR_DECL is output first if it is truthy
         and this element is the root (i.e. has no parent).
         """
         outfile = io.StringIO()
         self.write(
             outfile,
             indent=self.REPR_INDENT,
-            xml_decl=self.REPR_XML_DECL and self.depth == 0,
+            decl=self.depth == 0 and self.REPR_DECL,
         )
         return outfile.getvalue()
 
@@ -144,20 +153,22 @@ class Element:
 
     def insert(self, i, elem):
         "Insert the element at position i in the list of children of this element."
-        assert isinstance(elem, (Element, str))
+        assert isinstance(elem, (Element, str)), elem
+        assert self is not elem
         if isinstance(elem, Element):
             if elem.parent:
-                raise ValueError("given element has not been freed from its parent")
+                raise ValueError(f"element '{elem}' has not been freed from its parent '{elem.parent}'")
         self.children.insert(i, elem)
         if isinstance(elem, Element):
             elem.parent = self
 
     def append(self, elem):
         "Append the element to the end of the list of children of this element."
-        assert isinstance(elem, (Element, str))
+        assert isinstance(elem, (Element, str)), elem
+        assert self is not elem
         if isinstance(elem, Element):
             if elem.parent:
-                raise ValueError("element has not been freed from its parent")
+                raise ValueError(f"element '{elem}' has not been freed from its parent '{elem.parent}'")
         self.children.append(elem)
         if isinstance(elem, Element):
             elem.parent = self
@@ -172,7 +183,7 @@ class Element:
         and append to the children of this element.
         Return the created element.
         """
-        elem = Element(tag, **attrs)
+        elem = self.__class__(tag, **attrs) # Ensure that the same class is used throughout.
         self.append(elem)
         return elem
 
@@ -223,21 +234,26 @@ class Element:
             elif child1 != child2:
                 return ("diff", child1, child2)
 
-    def output(self, indent=None):
+    def output(self, indent=None, decl=True):
         """Return the XML code for the element and its children as a string.
-        The XML declaration is included if this element is the root
-        (i.e. has no parent).
+        The 'decl' value is output first if it is truthy and this element
+        is the root (i.e. has no parent). The default: 'self.REPR_DECL'
         """
         assert indent is None or (isinstance(indent, int) and indent >= 0)
         outfile = io.StringIO()
-        self.write(outfile, indent=indent, xml_decl=self.depth == 0)
+        if decl is True:
+            decl = self.REPR_DECL
+        self.write(outfile, indent=indent, decl=self.depth == 0 and decl)
         return outfile.getvalue()
 
-    def write(self, outfile, indent=None, xml_decl=False, encoding="utf-8"):
-        "Write the XML of the element and its children into the open file object."
+    def write(self, outfile, indent=None, decl=False):
+        """Write the XML of the element and its children into the open file object.
+        The 'decl' value is output first if it is a non-empty string.
+        If the class variable HTML is True, then an empty element ends in ">", not "/>".
+        """
         assert indent is None or (isinstance(indent, int) and indent >= 0)
-        if xml_decl:
-            outfile.write(f'<?xml version="1.0" encoding="{encoding}"?>\n')
+        if decl:
+            outfile.write(decl + "\n")
         if indent is None:
             padding = ""
         else:
@@ -266,8 +282,10 @@ class Element:
                     outfile.write("\n")
                 outfile.write(padding)
             outfile.write(f"</{self.tag}>")
+        elif self.HTML:
+            outfile.write(">")
         else:
-            outfile.write(" />")
+            outfile.write("/>")
 
 
 def parse(content):
@@ -293,12 +311,14 @@ def read(filepath_or_stream):
 class ContentHandler(xml.sax.ContentHandler):
     "Parse XML read events into an Element tree."
 
+    CLASS = Element
+
     def __init__(self):
         self.stack = []
         self.root = None
 
     def startElement(self, tag, attrs):
-        elem = Element(tag, **dict(attrs))
+        elem = self.CLASS(tag, **dict(attrs))
         if self.stack:
             self.stack[-1].children.append(elem)
             elem.parent = self.stack[-1]
@@ -314,8 +334,8 @@ class ContentHandler(xml.sax.ContentHandler):
             self.stack[-1].children.append(unescape(content))
 
 
-if __name__ == "__main__":
-    original = parse("""<?xml version="1.0" encoding="UTF-8" ?>
+def test():
+    original = parse("""<?xml version="1.0" encoding="utf-8" ?>
 <package xmlns="http://www.idpf.org/2007/opf" xmlns:dc="http://purl.org/dc/elements/1.1/" unique-identifier="db-id" version="3.0">
 <metadata>
 <dc:title id="t1">Sample .epub Book</dc:title>
@@ -325,10 +345,6 @@ if __name__ == "__main__":
 <dc:language>en</dc:language>
 </metadata>
 </package>""")
-    output = io.StringIO()
-    original.write(output, indent=2)
-    print(output.getvalue())
-    print()
 
     root = Element("package", xmlns="http://www.idpf.org/2007/opf", version="3.0")
     root["xmlns:dc"] = "http://purl.org/dc/elements/1.1/"
@@ -339,14 +355,12 @@ if __name__ == "__main__":
     metadata.create("dc:identifier", id="db-id").append("isbn")
     metadata.create("meta", property="dcterms:modified").append("2014-03-27T09:14:09Z")
     metadata.create("dc:language").append("en")
-    output = io.StringIO()
-    root.write(output, indent=2)
-    print(output.getvalue())
-    print()
 
     if diff := original.diff(root):
         print(diff)
-        print()
+    else:
+        print(root.output(indent=2))
 
-    for elem in original.walk():
-        print(elem)
+
+if __name__ == "__main__":
+    test()

@@ -1,6 +1,7 @@
 "Read frontmatter and text from a Markdown (.md) file, possibly with subtexts."
 
 import datetime as dt
+import pathlib
 
 import markdown
 import yaml
@@ -13,13 +14,17 @@ def read_texts(directory, supertext=None, ordinal=None):
     """Read the Markdown file(s) in the given directory, and recursively in
     any subdirectories. There must be a file 'text.md' in each directory.
     """
+    directory = pathlib.Path(directory)
     text = Text(
         directory / constants.TEXT_FILENAME, supertext=supertext, ordinal=ordinal
     )
     exclude = set(text.frontmatter.get("exclude", []))
     exclude.add(constants.TEXT_FILENAME)
     exclude.add(constants.README_FILENAME)
-    include = text.frontmatter.get("include", sorted(directory.iterdir()))
+    try:
+        include = [pathlib.Path(p) for p in text.frontmatter["include"]]
+    except KeyError:
+        include = sorted(directory.iterdir())
     include = [p for p in include if not (p.name.startswith(".") or p.name in exclude)]
     ordinal = 0
     for path in include:
@@ -59,7 +64,7 @@ class Text:
         Convert the Markdown text into AST.
         Include into the supertext, if any.
         """
-        self.filepath = filepath
+        self.filepath = pathlib.Path(filepath)
         if supertext is None:
             self.ordinal = ()
         else:
@@ -68,8 +73,6 @@ class Text:
         self.supertext = supertext
         if self.filepath.exists():
             self.frontmatter, self.text = split_file(self.filepath)
-        elif self.supertext is None:
-            raise FileNotFoundError(f"no such file '{filepath}'")
         else:
             self.frontmatter = {}
             self.text = ""

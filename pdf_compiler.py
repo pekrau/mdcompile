@@ -2,7 +2,6 @@
 
 import datetime as dt
 import io
-import pathlib
 
 import reportlab
 import reportlab.rl_config
@@ -13,15 +12,17 @@ from reportlab.platypus.tables import *
 from reportlab.platypus.tableofcontents import TableOfContents
 
 import constants
-import utils
 from compiler import Compiler
+import utils
 
 
 class PdfCompiler(Compiler):
     "Compile to PDF format."
 
-    def write_setup(self):
+    def write_initialize(self, output_filepath):
         "Set up the the PDF document."
+        self.output_filepath = output_filepath.with_suffix(".pdf")
+
         self.stylesheet = getSampleStyleSheet()
         # self.stylesheet.list()  # To see which are predefined.
 
@@ -100,23 +101,19 @@ class PdfCompiler(Compiler):
         self.stylesheet["Normal"].spaceBefore = 6
         self.stylesheet["Normal"].spaceAfter = 6
 
-        # Set attribute for essay having no TOC.
+        # Initial values.
         self.toc = None
-
-        # Document contents.
+        self.within_footnote = False
         self.flowables = []
 
-    def write_heading(self, heading, level, target=None):
+    def write_heading(self, heading, level):
         "Write heading at the specified level."
         level = min(level, constants.MAX_LEVEL)
-        if target:
-            self.flowables.append(TocMarker(level - 1, heading, target))
-        self.flowables.append(
-            Paragraph(heading, style=self.stylesheet[f"Heading{level}"])
-        )
+        self.flowables.append(Paragraph(heading, style=self.stylesheet[f"Heading{level}"]))
 
     def write_title_page(self):
-        "Write the title page. If no subtexts, this is all content except references."
+        "Write the title page. When no subtexts, this is all content except references."
+        # No page break!
         self.flowables.append(
             Paragraph(self.text.title, style=self.stylesheet["Title"])
         )
@@ -129,7 +126,7 @@ class PdfCompiler(Compiler):
             self.flowables.append(Paragraph(rights, style=self.stylesheet["Normal"]))
         self.flowables.append(
             Paragraph(
-                f'{self.tx("Last modification")}: {utils.isoformat(self.text.modified)}',
+                f'{self.tx("Last modification")}: {utils.timeformat(self.text.modified)}',
                 style=self.stylesheet["Italic"],
             )
         )
@@ -163,13 +160,13 @@ class PdfCompiler(Compiler):
         )
         self.flowables.append(self.toc)
 
-    def write_text_setup(self, text):
+    def write_text_initialize(self, text):
         "Set up for the next text."
         self.flowables.append(NotAtTopPageBreak())
-        self.write_heading(text.ordinal_title, text.level, target=text.identifier)
+        self.flowables.append(TocMarker(text.level - 1, text.ordinal_title, text.identifier))
 
     def write_footnotes_chapter(self, text):
-        "Write out footnotes for the chapter, if that mode, and any footnotes."
+        "Write out footnotes for the chapter, if that mode and any footnotes."
         if not text.footnotes:
             return
         if not self.footnotes_location == constants.FOOTNOTES_CHAPTER:
@@ -181,7 +178,7 @@ class PdfCompiler(Compiler):
         self.write_footnotes(text)
 
     def write_footnotes_book(self):
-        "Write out footnotes for the book, if that mode, and any footnotes."
+        "Write out footnotes for the book, if that mode and any footnotes."
         if not self.text.footnotes:
             return
         if not self.footnotes_location == constants.FOOTNOTES_BOOK:
@@ -279,16 +276,16 @@ class PdfCompiler(Compiler):
             if accessed := reference.get("accessed"):
                 self.append(f" ({self.tx('accessed')} {accessed})")
 
-    def write_indexed(self):
+    def write_index(self):
         "Write the contents of the index section."
-        if not self.indexed:
+        if not self.index_terms:
             return
-        title = self.tx("Index")
         self.flowables.append(NotAtTopPageBreak())
+        title = self.tx("Index")
         self.flowables.append(TocMarker(0, title, "index"))
         self.flowables.append(Paragraph(title, style=self.stylesheet["Heading1"]))
 
-        items = sorted(self.indexed.items(), key=lambda i: i[0].casefold())
+        items = sorted(self.index_terms.items(), key=lambda i: i[0].casefold())
         for canonical, texts in items:
             self.push("Index")
             self.append(f'<a name="index-{utils.safe(canonical)}"/>{canonical}')
@@ -296,10 +293,9 @@ class PdfCompiler(Compiler):
                 self.append(f"<br/>{text.ordinal_title}")
             self.pop()
 
-    def write_to_file(self, output_filepath):
+    def write_finalize(self):
         "Write the PDF contents to file."
-        output_filepath = pathlib.Path(output_filepath.with_suffix(".pdf"))
-        with open(str(output_filepath), "wb") as outfile:
+        with open(str(self.output_filepath), "wb") as outfile:
             props = dict(
                 title=self.text.title,
                 author=", ".join(self.text.authors),
@@ -314,7 +310,6 @@ class PdfCompiler(Compiler):
             else:
                 document = SimpleDocTemplate(outfile, **props)
                 document.build(self.flowables, onLaterPages=self.write_page_number)
-        return output_filepath
 
     def write_page_number(self, canvas, doc):
         "Write page number onto the current canvas."
@@ -327,7 +322,6 @@ class PdfCompiler(Compiler):
     def render_document(self, ast):
         self.within_quote = False
         self.within_code = False
-        self.within_footnote = False
         self.stack = []
         self.list_stack = []
         for child in ast["children"]:
@@ -377,11 +371,13 @@ class PdfCompiler(Compiler):
         self.pop()
 
     def render_paragraph(self, ast):
-        # NOTE: this flag may have value -1, denoting continued definition.
-        if (
-            self.within_footnote == False
-        ):  # If footnote started, then paragraph created.
-            self.push()
+        self.push()
+        if fn := self.within_footnote:
+            if not fn.get("started"):
+                self.append(f'<a name="{fn["identifier"]}"/>')
+                self.append(
+                    f'<a href="#{fn["identifier"]}-ref" underline="1" color="darkgreen"><strong>{fn["number"]}.</strong></a> '
+                )
 
         # Prepend paragraph number.
         if self.paragraph_number is not None:
@@ -398,11 +394,12 @@ class PdfCompiler(Compiler):
             self.pop(stylename="Quote")
         elif self.within_code:
             self.pop(stylename="Code", preformatted=True)
-        elif self.within_footnote:
-            if self.within_footnote > 0:  # Starting footnote definition.
-                self.pop(stylename="Footnote")
-            else:  # Continuing footnote definition.
+        elif fn := self.within_footnote:
+            if fn.get("started"):  # Continuing footnote definition.
                 self.pop(stylename="Footnote subsequent")
+            else: # Starting footnote definition.
+                self.pop(stylename="Footnote")
+                fn["started"] = True
         else:
             self.pop()
 
@@ -429,9 +426,6 @@ class PdfCompiler(Compiler):
             self.render(child)
         self.within_code = False
         self.pop()
-
-    def render_fenced_code(self, ast):
-        self.render_code_block(ast)
 
     def render_emphasis(self, ast):
         self.append("<em>")
@@ -513,15 +507,6 @@ class PdfCompiler(Compiler):
         self.append(
             f'<sup><strong><a name="{ast["identifier"]}-ref"/><a href="#{ast["identifier"]}" underline="1" color="darkgreen">{ast["number"]}</a></strong></sup>'
         )
-
-    def render_footnote_def_setup(self, ast):
-        "Setup the footnote rendering; output number."
-        self.push()
-        self.append(f'<a name="{ast["identifier"]}"/>')
-        self.append(
-            f'<a href="#{ast["identifier"]}-ref" underline="1" color="darkgreen"><strong>{ast["number"]}.</strong></a> '
-        )
-        self.within_footnote = -1
 
     def render_reference(self, ast):
         self.append(

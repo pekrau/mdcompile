@@ -1,4 +1,4 @@
-"""Minimalist module for generating an EPUB3 format file.
+"""Simple module for generating an EPUB3 format file.
 
 Based on the minimal EPUB3 example in https://github.com/thansen0/sample-epub-minimal
 
@@ -6,7 +6,7 @@ TODO:
 - add image
 """
 
-__version__ = "0.6"
+__version__ = "0.7"
 
 __all__ = ["Document", "Section", "minixml", "__version__"]
 
@@ -80,10 +80,10 @@ mark {
   font-family: monospace;
   background-color: white;
 }
-p.codeblock {
-  font-family: monospace;
-  margin-left: 3em;
-}""",
+ol.toc {
+  list-style: none;
+}
+""",
         )
 
     def add_toc_style(self, name):
@@ -215,7 +215,7 @@ p.codeblock {
         h1["class"] = "frontmatter"
         h1.append("Table of contents")
         ol = nav.create("ol")
-        ol["class"] = "contents"
+        ol["class"] = "contents toc"
         for name, section in self.sections.items():
             li = ol.create("li")
             li.create("a", href=f"{name}.xhtml").append(section.title)
@@ -251,10 +251,10 @@ class Section:
 
     def __init__(self, title, add_title=1, name=None, content=None, styles=True):
         """'title' must be unique in the document.
-        It is output as a 'title' element in XHTML 'head' element.
-        If 'add_title' is non-zero, 'title' is output in an 'h' element as
-        the first element in the 'body' element preceding any content.
         If 'name' is provided, it must be safe.
+        The XHTML 'body' element is automatically created.
+        If 'add_title' is non-zero, 'title' is added in an 'h' element as
+        the first element in the 'body' element.
         If 'styles' is True, then use all styles defined for the containing Document.
         If 'styles' is a string (whitespace delimited), then use only those.
         """
@@ -262,7 +262,7 @@ class Section:
         assert name is None or (name == safe(name))
         assert content is None or isinstance(content, (str, minixml.Element))
         self.title = title
-        self.name = safe(name or title)
+        self.name = name or safe(title)
         self.document = None
         if isinstance(styles, str):
             self.styles = [s for s in styles.split()]
@@ -276,7 +276,9 @@ class Section:
         self.subsections = {}
 
     def output(self):
-        "Return the XHTML for this section."
+        """Return the XHTML for this section.
+        The 'head' elements is created.
+        """
         document = minixml.Element("html", xmlns="http://www.w3.org/1999/xhtml")
         document["xmlns:epub"] = "http://www.idpf.org/2007/ops"
         head = document.create("head")
@@ -297,12 +299,14 @@ class Section:
         return document.output()
 
     def append(self, content):
-        """The 'content' is either an 'minixml.Element' instance or a string.
-        If a string, then it will be parsed using 'minixml.parse'. It must be valid XHTML.
-        The content must *not* contain the 'html', 'head' and 'body' elements; these
-        elements are wrapped around the content.
+        """Append the content to the 'body' element.
+        The 'content' is either an 'minixml.Element' instance or a string.
+        If a string, then it will be parsed using 'minixml.parse'.
+        The content must *not* contain the 'html', 'head' and 'body' elements;
+        these elements are wrapped around the content.
         """
         if isinstance(content, str):
+            # Loop over a copy of 'children' list to avoid problems when modifying it.
             for elem in list(minixml.parse(f"<tmp>{content}</tmp>").children):
                 self.body.append(elem.free())
         elif isinstance(content, minixml.Element):
@@ -346,15 +350,14 @@ class Section:
         if not subsections:
             return
         ol = li.create("ol")
+        ol["class"] = "toc"
         for subsection in subsections:
             li = ol.create("li")
             li.create("a", href=f"{subsection.name}.xhtml").append(subsection.title)
             subsection.append_sections_list(li)
 
 
-if __name__ == "__main__":
-    import pathlib
-
+def test():
     document = Document("Sample .epub Book", "isbn")
     document.add_style(
         "template",
@@ -433,9 +436,9 @@ li {
     chapter2.add_section(
         Section(
             "A subsection to chapter 2",
-            add_title=2,
+            add_title=False,
             styles="template",
-            content="<p>Some more stuff.</p>",
+            content="<h2>A different title</h2><p>Some more stuff.</p>",
         )
     )
 
@@ -449,3 +452,7 @@ li {
     )
 
     document.write("minimal.epub")
+
+
+if __name__ == "__main__":
+    test()

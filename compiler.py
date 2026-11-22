@@ -78,12 +78,12 @@ class Compiler:
         if missing:
             raise ValueError(f"Missing references: {', '.join(sorted(missing))}")
 
-        # Collect indexed terms.
-        self.indexed = {}
+        # Collect index terms.
+        self.index_terms = {}
         for text in self.text:
             for element in text.elements():
                 if element["element"] == "indexed":
-                    texts = self.indexed.setdefault(element["canonical"], [])
+                    texts = self.index_terms.setdefault(element["canonical"], [])
                     # Disallow multiple indexing of the same term in a text.
                     if text in texts:
                         element["multiple"] = True
@@ -98,8 +98,8 @@ class Compiler:
                     for element in text.elements():
                         if element["element"] == "footnote_ref":
                             element["number"] = str(number := number + 1)
-                            identifier = f"{text.identifier}-footnote-{number}"
                             element["text"] = text
+                            identifier = f"{text.identifier}-footnote-{number}"
                             element["identifier"] = identifier
                             footnote = text.footnotes[element["label"]]
                             footnote["number"] = number
@@ -111,8 +111,8 @@ class Compiler:
                         for element in text.elements():
                             if element["element"] == "footnote_ref":
                                 element["number"] = str(number := number + 1)
-                                identifier = f"{chapter.identifier}-footnote-{number}"
                                 element["text"] = chapter
+                                identifier = f"{chapter.identifier}-footnote-{number}"
                                 element["identifier"] = identifier
                                 footnote = text.footnotes[element["label"]]
                                 footnote["number"] = number
@@ -133,8 +133,8 @@ class Compiler:
                     for element in text.elements():
                         if element["element"] == "footnote_ref":
                             element["number"] = str(number := number + 1)
-                            identifier = f"{self.text.identifier}-footnote-{number}"
                             element["text"] = self.text
+                            identifier = f"{self.text.identifier}-footnote-{number}"
                             element["identifier"] = identifier
                             footnote = text.footnotes[element["label"]]
                             footnote["number"] = number
@@ -154,26 +154,28 @@ class Compiler:
         """Write the contents to a file.
         Return the filepath actually used.
         """
-        self.write_setup()
+        self.write_initialize(pathlib.Path(output_filepath))
         # There are subtexts: a book.
         if self.text.subtexts:
+            self.within_footnote = None
             self.write_title_page()
             self.write_toc()
-            for text in self.text.subtexts:
+            for text in self.text.subtexts: # Write out chapter-wise.
                 self.write_text(text)
                 self.write_footnotes_chapter(text)
             self.write_footnotes_book()
             self.write_references()
-            self.write_indexed()
+            self.write_index()
         # There are no subtexts; an essay.
         else:
             self.write_title_page()
             self.write_references()
             # No index for essay.
-        return self.write_to_file(output_filepath)
+        self.write_finalize()
+        return self.output_filepath
 
-    def write_setup(self):
-        "Set up the document for the specified format."
+    def write_initialize(self, output_filepath):
+        "Set up the output document."
         raise NotImplemented
 
     def write_title_page(self):
@@ -190,17 +192,24 @@ class Compiler:
 
     def write_text(self, text):
         "Write the contents of the text instance."
-        self.write_text_setup(text)
+        self.within_footnote = None
+        self.write_text_initialize(text)
+        self.write_heading(text.ordinal_title, text.level)
         if text.subtitle:
             self.write_heading(text.subtitle, text.level + 1)
         self.render(text.ast, level=text.level + 2)
         self.write_footnotes_text(text)
+        self.write_text_finalize(text)
         for subtext in text.subtexts:
             self.write_text(subtext)
 
-    def write_text_setup(self, text):
-        "Set up for the next text. Output the text title. Redefine when required."
-        self.write_heading(text.title, text.level)
+    def write_text_initialize(self, text):
+        "Set up for the next text. To be redefined."
+        pass
+
+    def write_text_finalize(self, text):
+        "Wrap up for this text. To be redefined."
+        pass
 
     def write_footnotes_text(self, text):
         "Write out footnotes for the text, if that mode."
@@ -218,7 +227,7 @@ class Compiler:
         raise NotImplemented
 
     def write_footnotes_book(self):
-        "Write out footnotes for the book, if that mode, and any footnotes."
+        "Write out footnotes for the book, if that mode and any footnotes."
         raise NotImplemented
 
     def write_footnotes(self, text):
@@ -231,11 +240,12 @@ class Compiler:
         "Write the references section, if any references."
         raise NotImplementedError
 
-    def write_indexed(self):
+    def write_index(self):
         "Write the index section, if any indexed terms. Only for book."
         raise NotImplementedError
 
-    def write_to_file(output_filepath):
+    def write_finalize(self):
+        "Finalize the document and write to file. Return the filepath actually used."
         raise NotImplementedError
 
     def render(self, ast, level=None):
@@ -283,8 +293,8 @@ class Compiler:
         raise NotImplementedError
 
     def render_fenced_code(self, ast):
-        "Render a fenced block of code."
-        raise NotImplementedError
+        "Render a fenced block of code. Simply calls 'render_code_block'."
+        self.render_code_block(ast)
 
     def render_image(self, ast):
         "Render an image."
@@ -339,19 +349,13 @@ class Compiler:
         raise NotImplementedError
 
     def render_footnote_def(self, ast):
-        "Render a footnote definition."
-        if not "number" in ast:  # Skip on first pass, within text.
+        "Render a footnote definition. Save the AST element for paragraph creation."
+        if not "number" in ast:  # Skip on first pass, when within text.
             return
-        self.render_footnote_def_setup(ast)
-        self.within_footnote = +1
-        self.footnote_text = ast["text"]
+        self.within_footnote = ast
         for child in ast["children"]:
             self.render(child)
-        self.within_footnote = False
-
-    def render_footnote_def_setup(self, ast):
-        "Setup the footnote rendering; output number."
-        raise NotImplementedError
+        self.within_footnote = None
 
     def render_reference(self, ast):
         "Render a reference."
