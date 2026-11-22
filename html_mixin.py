@@ -70,7 +70,7 @@ class HtmlMixin:
         for name, reference in sorted(self.referenced.items()):
             with self.push("p"):
                 with self.push("a", id=self.get_reference_id(name)):
-                    self.append(" ") # Avoid problem with non-finished element in HTML.
+                    self.append(" ")  # Avoid problem with non-finished element in HTML.
                 # Authors.
                 count = len(reference["authors"])
                 for pos, author in enumerate(reference["authors"]):
@@ -128,7 +128,7 @@ class HtmlMixin:
     def write_reference_book(self, reference):
         "Write data for reference of type 'book'."
         with self.push("em"):
-            self.append(reference['title'].rstrip('.'))
+            self.append(reference["title"].rstrip("."))
             self.append(".")
         if publisher := reference.get("publisher"):
             self.append(" ")
@@ -142,7 +142,7 @@ class HtmlMixin:
 
     def write_reference_post(self, reference):
         "Write data for reference of type 'post'."
-        self.append(reference['title'].rstrip('.'))
+        self.append(reference["title"].rstrip("."))
         self.append(".")
         if published := reference.get("published"):
             self.append(f" {self.tx('published')} {published}")
@@ -162,11 +162,15 @@ class HtmlMixin:
             with self.push("dl"):
                 with self.push("dt"):
                     with self.push("a", id=self.get_index_id(canonical)):
-                        self.append(" ") # Avoid problem with non-finished element in HTML.
+                        self.append(
+                            " "
+                        )  # Avoid problem with non-finished element in HTML.
                     self.append(canonical)
                 with self.push("dd"):
                     for text in texts:
-                        with self.push("a", href=self.get_indexed_href(text, canonical)) as a:
+                        with self.push(
+                            "a", href=self.get_indexed_href(text, canonical)
+                        ) as a:
                             a["class"] = "contrast"
                             a.append(text.ordinal_title)
                         if text is not texts[-1]:
@@ -191,7 +195,9 @@ class HtmlMixin:
             if fn := self.within_footnote:
                 if not fn.get("started"):
                     with self.push("a", id=fn["identifier"]):
-                        self.append(" ") # Avoid problem with non-finished element in HTML.
+                        self.append(
+                            " "
+                        )  # Avoid problem with non-finished element in HTML.
                     with self.push("strong"):
                         self.append(str(fn["number"]))
                         self.append(". ")
@@ -293,7 +299,7 @@ class HtmlMixin:
 
     def render_indexed(self, ast):
         "Render an indexed word or phrase."
-        with self.push("a", href=self.get_index_href(ast['canonical'])) as a:
+        with self.push("a", href=self.get_index_href(ast["canonical"])) as a:
             a["class"] = "contrast"
             if not ast.get("multiple"):
                 a["id"] = self.get_indexed_id(ast["canonical"])

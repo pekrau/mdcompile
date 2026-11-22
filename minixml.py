@@ -157,7 +157,9 @@ class Element:
         assert self is not elem
         if isinstance(elem, Element):
             if elem.parent:
-                raise ValueError(f"element '{elem}' has not been freed from its parent '{elem.parent}'")
+                raise ValueError(
+                    f"element '{elem}' has not been freed from its parent '{elem.parent}'"
+                )
         self.children.insert(i, elem)
         if isinstance(elem, Element):
             elem.parent = self
@@ -168,7 +170,9 @@ class Element:
         assert self is not elem
         if isinstance(elem, Element):
             if elem.parent:
-                raise ValueError(f"element '{elem}' has not been freed from its parent '{elem.parent}'")
+                raise ValueError(
+                    f"element '{elem}' has not been freed from its parent '{elem.parent}'"
+                )
         self.children.append(elem)
         if isinstance(elem, Element):
             elem.parent = self
@@ -183,7 +187,9 @@ class Element:
         and append to the children of this element.
         Return the created element.
         """
-        elem = self.__class__(tag, **attrs) # Ensure that the same class is used throughout.
+        elem = self.__class__(
+            tag, **attrs
+        )  # Ensure that the same class is used throughout.
         self.append(elem)
         return elem
 

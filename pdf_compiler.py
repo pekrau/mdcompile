@@ -109,7 +109,9 @@ class PdfCompiler(Compiler):
     def write_heading(self, heading, level):
         "Write heading at the specified level."
         level = min(level, constants.MAX_LEVEL)
-        self.flowables.append(Paragraph(heading, style=self.stylesheet[f"Heading{level}"]))
+        self.flowables.append(
+            Paragraph(heading, style=self.stylesheet[f"Heading{level}"])
+        )
 
     def write_title_page(self):
         "Write the title page. When no subtexts, this is all content except references."
@@ -163,7 +165,9 @@ class PdfCompiler(Compiler):
     def write_text_initialize(self, text):
         "Set up for the next text."
         self.flowables.append(NotAtTopPageBreak())
-        self.flowables.append(TocMarker(text.level - 1, text.ordinal_title, text.identifier))
+        self.flowables.append(
+            TocMarker(text.level - 1, text.ordinal_title, text.identifier)
+        )
 
     def write_footnotes_chapter(self, text):
         "Write out footnotes for the chapter, if that mode and any footnotes."
@@ -395,7 +399,7 @@ class PdfCompiler(Compiler):
         elif fn := self.within_footnote:
             if fn.get("started"):  # Continuing footnote definition.
                 self.pop(stylename="Footnote subsequent")
-            else: # Starting footnote definition.
+            else:  # Starting footnote definition.
                 self.pop(stylename="Footnote")
                 fn["started"] = True
         else:

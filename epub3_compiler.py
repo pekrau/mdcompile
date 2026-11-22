@@ -171,4 +171,3 @@ a.contrast {
     def get_indexed_href(self, text, canonical):
         "Href to the indexed term in the text."
         return f"{text.identifier}.xhtml#{self.get_indexed_id(canonical)}"
-            

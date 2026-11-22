@@ -90,7 +90,7 @@ class Compiler:
                             element["multiple"] = True
                         else:
                             texts.append(text)
-        else:                   # No index for essay.
+        else:  # No index for essay.
             self.index_terms = None
         # Transfer footnotes to the appropriate texts, and number them.
         match self.footnotes_location:
@@ -162,7 +162,7 @@ class Compiler:
             self.within_footnote = None
             self.write_title_page()
             self.write_toc()
-            for text in self.text.subtexts: # Write out chapter-wise.
+            for text in self.text.subtexts:  # Write out chapter-wise.
                 self.write_text(text)
                 self.write_footnotes_chapter(text)
             self.write_footnotes_book()

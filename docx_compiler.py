@@ -335,7 +335,9 @@ class DocxCompiler(Compiler):
         self.current_paragraph = self.doc.add_paragraph()
         if fn := self.within_footnote:
             self.current_paragraph.paragraph_format.left_indent = docx.shared.Pt(15)
-            self.current_paragraph.paragraph_format.first_line_indent = docx.shared.Pt(-15)
+            self.current_paragraph.paragraph_format.first_line_indent = docx.shared.Pt(
+                -15
+            )
             if not fn.get("started"):
                 run = self.current_paragraph.add_run(f"{fn['number']}. ")
                 run.font.bold = True

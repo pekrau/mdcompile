@@ -23,11 +23,20 @@ class HtmlCompiler(HtmlMixin, Compiler):
         self.document = Element("html")
         self.head = self.document.create("head")
         self.head.create("meta", charset="utf-8")
-        self.head.create("meta", name="viewport", content="width=device-width, initial-scale=1")
+        self.head.create(
+            "meta", name="viewport", content="width=device-width, initial-scale=1"
+        )
         self.head.create("meta", name="DC.title", content=self.text.title)
         for author in self.text.authors:
             self.head.create("meta", name="DC.creator", content=author)
-        for term in ["description", "subject", "type", "identifier", "language", "rights"]:
+        for term in [
+            "description",
+            "subject",
+            "type",
+            "identifier",
+            "language",
+            "rights",
+        ]:
             if content := self.text.frontmatter.get(term):
                 self.head.create("meta", name=f"DC.{term}", content=content)
         self.head.create("title").append(self.text.title)
@@ -75,8 +84,11 @@ class HtmlCompiler(HtmlMixin, Compiler):
 
     def write_text_initialize(self, text):
         "Set up for the next text."
+        self.write_spacing(
+            constants.MAX_LEVEL - min(text.level, constants.MAX_LEVEL) + 1
+        )
         with self.push("a", id=text.identifier):
-            self.append(" ") # Avoid problem with non-finished element in HTML.
+            self.append(" ")  # Avoid problem with non-finished element in HTML.
 
     def write_footnotes_chapter(self, text):
         "Write out footnotes for the chapter, if that mode and any footnotes."
@@ -85,7 +97,7 @@ class HtmlCompiler(HtmlMixin, Compiler):
         if not self.footnotes_location == constants.FOOTNOTES_CHAPTER:
             return
         with self.push("a", id=f"{text.identifier}-footnotes"):
-            self.append(" ") # Avoid problem with non-finished element in HTML.
+            self.append(" ")  # Avoid problem with non-finished element in HTML.
         with self.push("h3"):
             self.append(self.tx("Footnotes"))
         self.write_footnotes(text)
@@ -96,6 +108,7 @@ class HtmlCompiler(HtmlMixin, Compiler):
             return
         if not self.footnotes_location == constants.FOOTNOTES_BOOK:
             return
+        self.write_spacing(5)
         with self.push("h2"):
             self.append(self.tx("Footnotes"))
         self.write_footnotes(self.text)
@@ -103,8 +116,9 @@ class HtmlCompiler(HtmlMixin, Compiler):
     def write_references(self):
         "Write the references section."
         assert self.referenced
+        self.write_spacing(6)
         with self.push("a", id="__references__"):
-            self.append(" ") # Avoid problem with non-finished element in HTML.
+            self.append(" ")  # Avoid problem with non-finished element in HTML.
         title = self.tx("References")
         if self.text.subtexts:
             with self.push("h2"):
@@ -117,8 +131,9 @@ class HtmlCompiler(HtmlMixin, Compiler):
     def write_index(self):
         "Write the index section. Only for book."
         assert self.index_terms
+        self.write_spacing(6)
         with self.push("a", id="__index__"):
-            self.append(" ") # Avoid problem with non-finished element in HTML.
+            self.append(" ")  # Avoid problem with non-finished element in HTML.
         title = self.tx("Index")
         if self.text.subtexts:
             with self.push("h2"):
@@ -131,6 +146,10 @@ class HtmlCompiler(HtmlMixin, Compiler):
     def write_finalize(self):
         with open(str(self.output_filepath), "w") as outfile:
             self.document.write(outfile, indent=None, decl="<!DOCTYPE html>")
+
+    def write_spacing(self, spacing):
+        with self.push("hr", style=f"border-width: 5px; margin-top: {spacing}em;"):
+            pass
 
     def render_code_block(self, ast):
         "Render a block of code. It appears that EPUB3 and HTML disagree on this."
@@ -171,6 +190,7 @@ class HtmlCompiler(HtmlMixin, Compiler):
 
 if __name__ == "__main__":
     from text import Text
+
     text = Text("no such file")
     text.frontmatter["title"] = "A title"
     text.frontmatter["identifier"] = "abc123"
