@@ -1,8 +1,8 @@
 mdcompile
 =========
 
-Compile Markdown file(s) to DOCX, PDF and EPUB3. With extensions for
-hierarchy, footnotes, indexed terms and references.
+Compile Markdown file(s) to DOCX, PDF, EPUB3 and HTML. With extensions
+for hierarchy, footnotes, indexed terms and references.
 
 ```
 Usage: mdcompile.py [OPTIONS] [INPUTPATH] [OUTPUTPATH]
@@ -23,9 +23,10 @@ Options:
   Output formats: [mutually_exclusive]
                                   Formats to compile Markdown into. Overridden
                                   by an explicit extension in OUTPUTPATH.
-    -d, --docx                    DOCX format (default).
-    -p, --pdf                     PDF format.
-    -e, --epub3                   EPUB3 format.
+    -D, --docx                    DOCX format (default).
+    -P, --pdf                     PDF format.
+    -E, --epub3                   EPUB3 format.
+    -H, --html                    HTML format.
 ```
 
 ## Description of inputs
