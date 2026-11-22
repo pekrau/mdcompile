@@ -34,8 +34,9 @@ Options:
 The input path may be a file or a directory, which must exist.
 
 If the input path is a file, it will be the only file to be compiled.
-The extension of the path determines the format, overriding any format option provided.
-A document is prepared from a single Markdown file will have no table of contents.
+The extension of the path determines the format, overriding any format
+option provided.  A document is prepared from a single Markdown file
+will have no table of contents.
 
 If the input path is a directory, all Markdown files and subdirectories within
 it will be compiled. The directory structure must be as follows:
@@ -55,13 +56,14 @@ it will be compiled. The directory structure must be as follows:
 The Markdown files may contain frontmatter in YAML dictionary format.
 The following entries are effective in all Markdown files:
 
-- *title*: The title of the document (if the top 'text.md' file) or title of the chapter
-  or section. Default: the name of the file or directory.
+- *title*: The title of the document (if the top 'text.md' file) or
+  title of the chapter or section. Default: the name of the file or
+  directory.
 
 - *subtitle*: The subtitle of the document, chapter or section. Default: none.
 
-- *include*: List of all names of files and subdirectorites that are to
-be included as subsections. The order is significant.
+- *include*: List of all names of files and subdirectorites that are
+  to be included as subsections. The order is significant.
 
 - *exclude*: A list of the names of files in the same directory that are to
   be ignored.
@@ -69,9 +71,10 @@ be included as subsections. The order is significant.
 The following frontmatter entries are effective only when provided in the top
 Markdown file for a document:
 
-- *authors*: A list of strings giving the authors of the document or document. No default.
+- *authors*: A list of strings giving the authors of the document or
+   document. No default.
 
-- *language*: Default: 'sv-SE'.
+- *language*: Default: 'sv'.
 
 - *identifier*: A unique identifier for the document.
 
@@ -81,8 +84,8 @@ Markdown file for a document:
 - *reference-title*: Boolean 'true' or 'false': Whether to output the title of a
   reference when given in the text. Default: 'false'
 
-- *paragraph-numbers*: Boolean 'true' or 'false': Whether to output the number of
-  each paragraph in the document. Default: 'false'
+- *paragraph-numbers*: Boolean 'true' or 'false': Whether to output
+  the number of each paragraph in the document. Default: 'false'
 
 - *library*: The path to the library directory containing references.
   Default: environment variable LIBRARY_DIR

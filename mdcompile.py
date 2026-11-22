@@ -86,6 +86,8 @@ def cli(inputpath, outputpath, readme, docx, pdf, epub3, html):
     click.echo(f"{len(text)} Markdown files read.")
     if compiler.library:
         click.echo(f"{len(compiler.referenced)} references from '{compiler.library}'.")
+    else:
+        click.echo("No library; no references output.")
 
     if inputpath.is_dir():
         if outputpath is None:
@@ -99,7 +101,10 @@ def cli(inputpath, outputpath, readme, docx, pdf, epub3, html):
         filepath = compiler.write(outputpath.with_suffix(extension))
     except (ValueError, IOError) as error:
         raise click.UsageError(str(error))
-    click.echo(f"{len(compiler.index_terms)} terms indexed.")
+    if compiler.index_terms is None:
+        click.echo("No indexing was done.")
+    else:
+        click.echo(f"{len(compiler.index_terms)} terms indexed.")
 
     if compiler.paragraph_number is not None:
         click.echo(f"{compiler.paragraph_number} paragraphs.")

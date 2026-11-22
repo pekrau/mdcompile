@@ -190,9 +190,8 @@ class PdfCompiler(Compiler):
         self.write_footnotes(self.text)
 
     def write_references(self):
-        "Write the references section, if any references."
-        if not self.referenced:
-            return
+        "Write the references section."
+        assert self.referenced
         title = self.tx("References")
         if self.text.subtexts:  # Book; references in separate section.
             self.flowables.append(NotAtTopPageBreak())
@@ -277,9 +276,8 @@ class PdfCompiler(Compiler):
                 self.append(f" ({self.tx('accessed')} {accessed})")
 
     def write_index(self):
-        "Write the contents of the index section."
-        if not self.index_terms:
-            return
+        "Write the index section. Only for book."
+        assert self.index_terms
         self.flowables.append(NotAtTopPageBreak())
         title = self.tx("Index")
         self.flowables.append(TocMarker(0, title, "index"))
@@ -376,7 +374,7 @@ class PdfCompiler(Compiler):
             if not fn.get("started"):
                 self.append(f'<a name="{fn["identifier"]}"/>')
                 self.append(
-                    f'<a href="#{fn["identifier"]}-ref" underline="1" color="darkgreen"><strong>{fn["number"]}.</strong></a> '
+                    f'<a href="#{fn["identifier"]}-ref" underline="1" color="black"><strong>{fn["number"]}.</strong></a> '
                 )
 
         # Prepend paragraph number.
@@ -499,18 +497,21 @@ class PdfCompiler(Compiler):
         self.list_stack[-1].append(item)
 
     def render_indexed(self, ast):
-        self.append(
-            f'<a href="#index-{utils.safe(ast["canonical"])}" underline="1" color="darkgreen">{ast["term"]}</a>'
-        )
+        if self.index_terms is None:
+            self.append(ast["term"])
+        else:
+            self.append(
+                f'<a href="#index-{utils.safe(ast["canonical"])}" underline="1" color="black">{ast["term"]}</a>'
+            )
 
     def render_footnote_ref(self, ast):
         self.append(
-            f'<sup><strong><a name="{ast["identifier"]}-ref"/><a href="#{ast["identifier"]}" underline="1" color="darkgreen">{ast["number"]}</a></strong></sup>'
+            f'<sup><strong><a name="{ast["identifier"]}-ref"/><a href="#{ast["identifier"]}" underline="1" color="black">{ast["number"]}</a></strong></sup>'
         )
 
     def render_reference(self, ast):
         self.append(
-            f'<em><a href="#{ast["name"]}" underline="1" color="darkgreen">{ast["name"]}</a></em>'
+            f'<em><a href="#{ast["name"]}" underline="1" color="black">{ast["name"]}</a></em>'
         )
         if self.reference_title:
             self.append(f': <em>{self.referenced[ast["name"]]["title"]}</em>')

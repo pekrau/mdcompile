@@ -106,25 +106,21 @@ a.contrast {
         self.write_footnotes(self.text)
 
     def write_references(self):
-        "Write the references section, if any references."
-        if self.referenced:
-            title = self.tx("References")
-            if self.text.subtexts:  # Book; references in a separate section.
-                self.current_section = epub3.Section(title)
-                self.document.add_section(self.current_section)
-                self.stack = [self.current_section.body]
-            else:  # Essay; references after the text; no new section.
-                self.references_section = None
-                with self.push("h3"):
-                    self.append(title)
-            self.write_references_entries()
-        else:
-            self.references_section = None
+        "Write the references section."
+        assert self.referenced
+        title = self.tx("References")
+        if self.text.subtexts:  # Book; references in a separate section.
+            self.current_section = epub3.Section(title)
+            self.document.add_section(self.current_section)
+            self.stack = [self.current_section.body]
+        else:  # Essay; references after the text; no new section.
+            with self.push("h3"):
+                self.append(title)
+        self.write_references_entries()
 
     def write_index(self):
-        "Write the index section, if any index terms. Only for book."
-        if not self.index_terms:
-            return
+        "Write the index section. Only for book."
+        assert self.index_terms
         self.current_section = epub3.Section(self.tx("Index"))
         self.document.add_section(self.current_section)
         self.stack = [self.current_section.body]
@@ -144,7 +140,10 @@ a.contrast {
 
     def get_footnote_href(self, ast):
         "Href to the footnote definition in EPUB3 format."
-        return f"{ast['text'].identifier}-footnotes.xhtml#{ast['identifier']}"
+        if self.text.subtexts:
+            return f"{ast['text'].identifier}-footnotes.xhtml#{ast['identifier']}"
+        else:
+            return f"{ast['text'].identifier}.xhtml#{ast['identifier']}"
 
     def get_reference_id(self, name):
         "Id for the reference in EPUB3 format."
@@ -152,7 +151,10 @@ a.contrast {
 
     def get_reference_href(self, ast):
         "Href to the reference in EPUB3 format."
-        return f"{self.tx('References')}.xhtml#{self.get_reference_id(ast['name'])}"
+        if self.text.subtexts:
+            return f"{self.tx('References')}.xhtml#{self.get_reference_id(ast['name'])}"
+        else:
+            return f"#{self.get_reference_id(ast['name'])}"
 
     def get_index_id(self, canonical):
         "Id for the index entry."
@@ -169,3 +171,4 @@ a.contrast {
     def get_indexed_href(self, text, canonical):
         "Href to the indexed term in the text."
         return f"{text.identifier}.xhtml#{self.get_indexed_id(canonical)}"
+            

@@ -101,9 +101,8 @@ class HtmlCompiler(HtmlMixin, Compiler):
         self.write_footnotes(self.text)
 
     def write_references(self):
-        "Write the references section, if any references."
-        if not self.referenced:
-            return
+        "Write the references section."
+        assert self.referenced
         with self.push("a", id="__references__"):
             self.append(" ") # Avoid problem with non-finished element in HTML.
         title = self.tx("References")
@@ -116,9 +115,8 @@ class HtmlCompiler(HtmlMixin, Compiler):
         self.write_references_entries()
 
     def write_index(self):
-        "Write the index section, if any index terms. Only for book."
-        if not self.index_terms:
-            return
+        "Write the index section. Only for book."
+        assert self.index_terms
         with self.push("a", id="__index__"):
             self.append(" ") # Avoid problem with non-finished element in HTML.
         title = self.tx("Index")

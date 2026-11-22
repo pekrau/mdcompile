@@ -79,17 +79,19 @@ class Compiler:
             raise ValueError(f"Missing references: {', '.join(sorted(missing))}")
 
         # Collect index terms.
-        self.index_terms = {}
-        for text in self.text:
-            for element in text.elements():
-                if element["element"] == "indexed":
-                    texts = self.index_terms.setdefault(element["canonical"], [])
-                    # Disallow multiple indexing of the same term in a text.
-                    if text in texts:
-                        element["multiple"] = True
-                    else:
-                        texts.append(text)
-
+        if self.text.subtexts:
+            self.index_terms = {}
+            for text in self.text:
+                for element in text.elements():
+                    if element["element"] == "indexed":
+                        texts = self.index_terms.setdefault(element["canonical"], [])
+                        # Disallow multiple indexing of the same term in a text.
+                        if text in texts:
+                            element["multiple"] = True
+                        else:
+                            texts.append(text)
+        else:                   # No index for essay.
+            self.index_terms = None
         # Transfer footnotes to the appropriate texts, and number them.
         match self.footnotes_location:
             case constants.FOOTNOTES_TEXT:
@@ -164,12 +166,15 @@ class Compiler:
                 self.write_text(text)
                 self.write_footnotes_chapter(text)
             self.write_footnotes_book()
-            self.write_references()
-            self.write_index()
+            if self.referenced:
+                self.write_references()
+            if self.index_terms:
+                self.write_index()
         # There are no subtexts; an essay.
         else:
             self.write_title_page()
-            self.write_references()
+            if self.referenced:
+                self.write_references()
             # No index for essay.
         self.write_finalize()
         return self.output_filepath
@@ -241,7 +246,7 @@ class Compiler:
         raise NotImplementedError
 
     def write_index(self):
-        "Write the index section, if any indexed terms. Only for book."
+        "Write the index section. Only for book."
         raise NotImplementedError
 
     def write_finalize(self):

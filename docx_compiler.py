@@ -210,9 +210,8 @@ class DocxCompiler(Compiler):
         self.write_footnotes(self.text)
 
     def write_references(self):
-        "Write the references section, if any references."
-        if not self.referenced:
-            return
+        "Write the references section."
+        assert self.referenced
         if self.text.subtexts:  # Book; references in separate section.
             self.doc.add_page_break()
             paragraph = self.doc.add_paragraph(style="Title 1")
@@ -294,9 +293,8 @@ class DocxCompiler(Compiler):
                 paragraph.add_run(f" ({self.tx('accessed')} {accessed})")
 
     def write_index(self):
-        "Write the index section, if any index terms. Only for book."
-        if not self.index_terms:
-            return
+        "Write the index section. Only for book."
+        assert self.index_terms
         self.doc.add_page_break()
         paragraph = self.doc.add_paragraph(style="Title 1")
         paragraph.add_run(self.tx("Index"))
