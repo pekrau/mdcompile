@@ -57,7 +57,8 @@ class HtmlMixin:
                 self.append(f"{self.tx('Last modification')}: ")
                 self.append(utils.timeformat(self.text.modified))
         self.render(self.text.ast, level=3)
-        self.write_spacing(3)
+        if self.text.footnotes:
+            self.write_spacing(3)
         self.write_footnotes_text(self.text)
 
     def write_heading(self, heading, level, target=None):

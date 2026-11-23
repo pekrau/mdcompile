@@ -22,10 +22,12 @@ def read_texts(directory, supertext=None, ordinal=None):
     exclude.add(constants.TEXT_FILENAME)
     exclude.add(constants.README_FILENAME)
     try:
-        include = [pathlib.Path(p) for p in text.frontmatter["include"]]
+        include = [directory / p for p in text.frontmatter["include"]]
     except KeyError:
         include = sorted(directory.iterdir())
-    include = [p for p in include if not (p.name.startswith(".") or p.name in exclude)]
+        include = [
+            p for p in include if not (p.name.startswith(".") or p.name in exclude)
+        ]
     ordinal = 0
     for path in include:
         if path.is_dir():

@@ -32,12 +32,6 @@ class Timer:
 
 @click.command()
 @click.help_option("--help", "-h")
-@click.option(
-    "--readme",
-    "-r",
-    is_flag=True,
-    help=f"Also write out a '{constants.README_FILENAME}' file for the compiled file(s).",
-)
 @optgroup.group(
     "Output formats",
     cls=MutuallyExclusiveOptionGroup,
@@ -47,6 +41,12 @@ class Timer:
 @optgroup.option("--pdf", "-P", is_flag=True, help="PDF format.")
 @optgroup.option("--epub3", "-E", is_flag=True, help="EPUB3 format.")
 @optgroup.option("--html", "-H", is_flag=True, help="HTML format.")
+@optgroup.option(
+    "--readme",
+    "-R",
+    is_flag=True,
+    help=f"Write out a '{constants.README_FILENAME}' file with a table of contents.",
+)
 @click.argument(
     "inputpath",
     default=None,
@@ -59,7 +59,7 @@ class Timer:
     type=click.Path(exists=False, path_type=pathlib.Path),
     help="Output file path (optional). Computed from INPUTPATH if not given. The file extension, if given, determines the output format.",
 )
-def cli(inputpath, outputpath, readme, docx, pdf, epub3, html):
+def cli(inputpath, outputpath, docx, pdf, epub3, html, readme):
     "Command-line script to compile Markdown file(s)."
     timer = Timer()
     click.echo(f"mdc {constants.__version__}")
@@ -70,51 +70,73 @@ def cli(inputpath, outputpath, readme, docx, pdf, epub3, html):
         text = read_texts(inputpath)
     else:
         text = Text(inputpath)
-
-    format = "html" if html else "epub3" if epub3 else "pdf" if pdf else "docx"
-    if outputpath:
-        if extension := outputpath.suffix.lower():
-            format = extension.lstrip(".")
-            if format == "epub":
-                format = "epub3"
-    extension = f".{format}"
-    try:
-        compiler = get_compiler(text, format=format)
-    except ValueError as error:
-        raise click.UsageError(str(error))
-
     click.echo(f"{len(text)} Markdown files read.")
-    if compiler.reflib:
-        click.echo(f"{len(compiler.referenced)} references from '{compiler.reflib}'.")
-    else:
-        click.echo("No reflib defined; no references output.")
-
-    if inputpath.is_dir():
-        if outputpath is None:
-            outputpath = inputpath / constants.OUTPUT_FILENAME
-        elif outputpath.is_dir():
-            outputpath = outputpath / constants.OUTPUT_FILENAME
-    elif outputpath is None:
-        outputpath = inputpath.with_suffix(extension)
-
-    try:
-        filepath = compiler.write(outputpath.with_suffix(extension))
-    except (ValueError, IOError) as error:
-        raise click.UsageError(str(error))
-    if compiler.index_terms is None:
-        click.echo("No indexing was done.")
-    else:
-        click.echo(f"{len(compiler.index_terms)} terms indexed.")
-
-    if compiler.paragraph_number is not None:
-        click.echo(f"{compiler.paragraph_number} paragraphs.")
-    click.echo(f"Wrote '{filepath}'.")
 
     if readme:
-        filepath = outputpath.parent / constants.README_FILENAME
-        write_readme(filepath, text)
-        click.echo(f"Wrote '{filepath}'.")
+        try:
+            compiler = get_compiler(text, format="epub3")  # Fastest compiler.
+        except ValueError as error:
+            raise click.UsageError(str(error))
+        if outputpath:
+            if outputpath.is_dir():
+                filepath = outputpath / constants.README_FILENAME
+            else:
+                filepath = outputpath
+        else:
+            if inputpath.is_dir():
+                filepath = inputpath / constants.README_FILENAME
+            else:
+                filepath = inputpath.parent / constants.README_FILENAME
+        with open(filepath, "w") as outfile:
+            outfile.write(compiler.text.title + "\n")
+            outfile.write("=" * len(compiler.text.title) + "\n\n")
+            for subtext in compiler.text:
+                if subtext is compiler.text:
+                    continue
+                outfile.write(" " * 5 * (len(subtext.ordinal) - 1))
+                outfile.write(f"{subtext.ordinal[-1]}. {subtext.title}\n")
 
+    else:
+        format = "html" if html else "epub3" if epub3 else "pdf" if pdf else "docx"
+        if outputpath:
+            if extension := outputpath.suffix.lower():
+                format = extension.lstrip(".")
+                if format == "epub":
+                    format = "epub3"
+        extension = f".{format}"
+        try:
+            compiler = get_compiler(text, format=format)
+        except ValueError as error:
+            raise click.UsageError(str(error))
+
+        if compiler.paragraph_number is not None:
+            click.echo(f"{compiler.paragraph_number} paragraphs.")
+
+        if compiler.reflib:
+            click.echo(
+                f"{len(compiler.referenced)} references from '{compiler.reflib}'."
+            )
+        else:
+            click.echo("No reflib defined; no references output.")
+
+        if inputpath.is_dir():
+            if outputpath is None:
+                outputpath = inputpath / constants.OUTPUT_FILENAME
+            elif outputpath.is_dir():
+                outputpath = outputpath / constants.OUTPUT_FILENAME
+        elif outputpath is None:
+            outputpath = inputpath.with_suffix(extension)
+
+        try:
+            filepath = compiler.write(outputpath.with_suffix(extension))
+        except (ValueError, IOError) as error:
+            raise click.UsageError(str(error))
+        if compiler.index_terms is None:
+            click.echo("No indexing was done.")
+        else:
+            click.echo(f"{len(compiler.index_terms)} terms indexed.")
+
+    click.echo(f"Wrote '{filepath}'.")
     click.echo(timer)
 
 
@@ -132,18 +154,6 @@ def get_compiler(text, format="docx"):
         case _:
             raise ValueError(f"unknown format '{format}'")
     return compiler
-
-
-def write_readme(outputpath, text):
-    "Write out a README.md file for the book."
-    with open(outputpath, "w") as outfile:
-        outfile.write(compiler.text.title + "\n")
-        outfile.write("=" * len(compiler.text.title) + "\n\n")
-        for subtext in compiler.text:
-            if subtext is compiler.text:
-                continue
-            outfile.write(" " * 5 * (len(subtext.ordinal) - 1))
-            outfile.write(f"{subtext.ordinal[-1]}. {subtext.title}\n")
 
 
 if __name__ == "__main__":

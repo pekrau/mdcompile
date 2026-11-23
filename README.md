@@ -18,8 +18,7 @@ Positional arguments:
 
 Options:
   -h, --help                      Show this message and exit.
-  -r, --readme                    Also write out a 'README.md' file for the
-                                  compiled file(s).
+
   Output formats: [mutually_exclusive]
                                   Formats to compile Markdown into. Overridden
                                   by an explicit extension in OUTPUTPATH.
@@ -27,6 +26,8 @@ Options:
     -P, --pdf                     PDF format.
     -E, --epub3                   EPUB3 format.
     -H, --html                    HTML format.
+    -R, --readme                  Write out a 'README.md' file with a table of
+                                  contents.
 ```
 
 ## Description of inputs
