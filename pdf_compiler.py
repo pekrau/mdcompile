@@ -135,6 +135,9 @@ class PdfCompiler(Compiler):
         # Spacer beneath header items.
         self.flowables.append(Spacer(0, 20))
         self.render(self.text.ast, level=3)
+        self.flowables.append(
+            HRFlowable(width="100%", color="lightgrey", spaceBefore=30)
+        )
         self.write_footnotes_text(self.text)
 
     def write_toc(self):
@@ -202,10 +205,13 @@ class PdfCompiler(Compiler):
             self.flowables.append(TocMarker(0, title, "references"))
             self.flowables.append(Paragraph(title, style=self.stylesheet["Heading1"]))
         else:  # Essay; references after the text; no page break, no TOC.
+            self.flowables.append(
+                HRFlowable(width="1000%", color="lightgrey", spaceBefore=30)
+            )
             self.flowables.append(Paragraph(title, style=self.stylesheet["Heading3"]))
         for name, reference in sorted(self.referenced.items()):
             self.push("Reference")
-            self.append(f'<a name="{name}"/>')
+            self.append(f'<a name="{self.get_reference_id(name)}"/>')
             # Authors.
             count = len(reference["authors"])
             for pos, author in enumerate(reference["authors"]):
@@ -290,7 +296,7 @@ class PdfCompiler(Compiler):
         items = sorted(self.index_terms.items(), key=lambda i: i[0].casefold())
         for canonical, texts in items:
             self.push("Index")
-            self.append(f'<a name="index-{utils.safe(canonical)}"/>{canonical}')
+            self.append(f'<a name="{self.get_index_id(canonical)}"/>{canonical}')
             for text in texts:
                 self.append(f"<br/>{text.ordinal_title}")
             self.pop()
@@ -505,7 +511,7 @@ class PdfCompiler(Compiler):
             self.append(ast["term"])
         else:
             self.append(
-                f'<a href="#index-{utils.safe(ast["canonical"])}" underline="1" color="black">{ast["term"]}</a>'
+                f'<a href="#{self.get_index_id(ast["canonical"])}" underline="1" color="black">{ast["term"]}</a>'
             )
 
     def render_footnote_ref(self, ast):
@@ -514,11 +520,22 @@ class PdfCompiler(Compiler):
         )
 
     def render_reference(self, ast):
-        self.append(
-            f'<em><a href="#{ast["name"]}" underline="1" color="black">{ast["name"]}</a></em>'
-        )
-        if self.reference_title:
-            self.append(f': <em>{self.referenced[ast["name"]]["title"]}</em>')
+        if reference := self.referenced.get(ast["name"]):
+            self.append(
+                f'<em><a href="#{self.get_reference_id(ast["name"])}" underline="1" color="black">{ast["name"]}</a></em>'
+            )
+            if self.reference_title:
+                self.append(f': <em>{self.referenced[ast["name"]]["title"]}</em>')
+        else:
+            self.append(ast["name"])
+
+    def get_reference_id(self, name):
+        "Id for the reference."
+        return f"__reference__{utils.safe(name)}"
+
+    def get_index_id(self, name):
+        "Id for the indexed term."
+        return f"__index__{utils.safe(name)}"
 
 
 class TocDocTemplate(SimpleDocTemplate):

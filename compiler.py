@@ -4,37 +4,23 @@ import os
 import pathlib
 
 import constants
-import library
+import text
 import utils
-from text import Text
-
-
-class Tx:
-    "Translate fixed terms in the code."
-
-    def __init__(self, language):
-        self.language = language
-
-    def __call__(self, term):
-        try:
-            return constants.LEXICON[self.language][term]
-        except KeyError:
-            return term
 
 
 class Compiler:
     "Abstract compiler class; to be inherited and elaborated."
 
     def __init__(self, text):
-        assert isinstance(text, Text)
         self.text = text
 
         # Get output parameters from text frontmatter.
         fm = self.text.frontmatter
         # Write out the reference title.
         self.reference_title = fm.get("reference-title", False)
+        # Write paragraph numbers.
         if fm.get("paragraph-numbers", False):
-            self.paragraph_number = 0  # Output paragraph numbers.
+            self.paragraph_number = 0  # Paragraph numbers.
         else:
             self.paragraph_number = None  # No paragraph numbers.
 
@@ -50,33 +36,27 @@ class Compiler:
         # Translator.
         self.tx = Tx(self.text.language)
 
-        # References library
-        path = self.text.frontmatter.get("library")
-        if not path:
-            try:
-                path = pathlib.Path(os.environ["LIBRARY_DIR"])
-            except KeyError:
-                path = None
-        if path:
-            self.library = library.Library(path)
-        else:
-            self.library = {}
-
-        # Collect references in the text(s). Error if any missing.
+        # References library. Collect references in the text(s). Error if any missing.
         self.referenced = {}
-        missing = set()
-        for text in self.text:
-            for element in text.elements():
-                if element["element"] != "reference":
-                    continue
-                name = element["name"]
-                if name not in self.referenced:
-                    try:
-                        self.referenced[name] = self.library[name]
-                    except KeyError:
-                        missing.add(name)
-        if missing:
-            raise ValueError(f"Missing references: {', '.join(sorted(missing))}")
+        if not (path := self.text.frontmatter.get("reflib")):
+            path = os.environ.get("REFLIB_DIR")
+        if path:
+            missing = set()
+            self.reflib = RefLib(path)
+            for text in self.text:
+                for element in text.elements():
+                    if element["element"] != "reference":
+                        continue
+                    name = element["name"]
+                    if name not in self.referenced:
+                        try:
+                            self.referenced[name] = self.reflib[name]
+                        except KeyError:
+                            missing.add(name)
+            if missing:
+                raise ValueError(f"Missing references: {', '.join(sorted(missing))}")
+        else:
+            self.reflib = None
 
         # Collect index terms.
         if self.text.subtexts:
@@ -157,8 +137,8 @@ class Compiler:
         Return the filepath actually used.
         """
         self.write_initialize(pathlib.Path(output_filepath))
-        # There are subtexts: a book.
-        if self.text.subtexts:
+
+        if self.text.subtexts:  # There are subtexts: a book.
             self.within_footnote = None
             self.write_title_page()
             self.write_toc()
@@ -170,12 +150,13 @@ class Compiler:
                 self.write_references()
             if self.index_terms:
                 self.write_index()
-        # There are no subtexts; an essay.
-        else:
+
+        else:  # There are no subtexts; an essay.
             self.write_title_page()
             if self.referenced:
                 self.write_references()
             # No index for essay.
+
         self.write_finalize()
         return self.output_filepath
 
@@ -223,7 +204,7 @@ class Compiler:
         if not self.footnotes_location == constants.FOOTNOTES_TEXT:
             return
         self.write_heading(
-            self.tx("Footnotes"), 4 if text is self.text else text.level + 3
+            self.tx("Footnotes"), 3 if text is self.text else text.level + 3
         )
         self.write_footnotes(text)
 
@@ -365,3 +346,40 @@ class Compiler:
     def render_reference(self, ast):
         "Render a reference."
         raise NotImplementedError
+
+
+class Tx:
+    "Translate fixed terms in the code."
+
+    def __init__(self, language):
+        self.language = language
+
+    def __call__(self, term):
+        try:
+            return constants.LEXICON[self.language][term]
+        except KeyError:
+            return term
+
+
+class RefLib:
+    "Access reflib files."
+
+    def __init__(self, dirpath):
+        if not dirpath:
+            raise ValueError("no dirpath provided")
+        dirpath = pathlib.Path(dirpath)
+        if not dirpath.exists():
+            raise IOError(f"no such reflib directory: {dirpath}")
+        if not dirpath.is_dir():
+            raise IOError(f"reflib path is not a directory: {dirpath}")
+        self.dirpath = dirpath
+
+    def __str__(self):
+        return str(self.dirpath)
+
+    def __getitem__(self, name):
+        "Return the reference as a dictionary, given the name 'Lastname year'."
+        filepath = self.dirpath / f"{utils.safe(name)}.md"
+        if not filepath.exists():
+            raise KeyError(name)
+        return text.split_file(filepath)[0]  # Return frontmatter only.

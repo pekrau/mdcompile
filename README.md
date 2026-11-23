@@ -99,10 +99,15 @@ Markdown file for a document:
 - *rights*: Copyright notice or similar. Default: none.
 
 
-## Dependencies
+## Software
+
+This code has been lovingly hand-crafted. No AI tools were used in its development.
+
+Written in Python https://www.python.org/ using:
 
 - Marko https://marko-py.readthedocs.io/
 - PyYAML https://pyyaml.org/
 - python-docx https://python-docx.readthedocs.io/
 - ReportLab https://www.reportlab.com/
 - Click https://click.palletsprojects.com/
+

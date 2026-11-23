@@ -6,7 +6,8 @@ This is the text in chapter 1.
 A new paragraph. With **bold** text, and a *word* in italics.
 And the following should be in both ***bold and italics***.
 
-The chemical formula for water is H~2~O. The [#sulfate] ion is SO~4~^-2^. [^chemistry]
+The chemical formula for water is H~2~O. The formula SO~4~^-2^ describes
+the [#sulfate] ion.[^chemistry]
 
 [^chemistry]: Reference to Wikipedia required?
 

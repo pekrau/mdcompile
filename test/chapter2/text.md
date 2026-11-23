@@ -1,7 +1,7 @@
 ---
 title: Testing some more Markdown features
 ---
-And here is a footnote which really should be on the title page[^no_ai].
+And here is a footnote which really should be on the title page.[^no_ai]
 
 [^no_ai]: No AI was used to generate this text.
 

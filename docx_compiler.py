@@ -137,6 +137,7 @@ class DocxCompiler(Compiler):
         ).font.italic = True
         paragraph.paragraph_format.space_after = docx.shared.Pt(30)
         self.render(self.text.ast, level=3)
+        self.current_paragraph.paragraph_format.space_after = docx.shared.Pt(30)
         self.write_footnotes_text(self.text)
 
     def write_heading(self, heading, level):
@@ -216,7 +217,8 @@ class DocxCompiler(Compiler):
             self.doc.add_page_break()
             paragraph = self.doc.add_paragraph(style="Title 1")
         else:  # Essay; references after the text; no page break.
-            paragraph = self.doc.add_paragraph(style="Title 3")
+            paragraph = self.doc.add_paragraph(style="Title 4")
+            paragraph.paragraph_format.space_before = docx.shared.Pt(40)
         paragraph.add_run(self.tx("References"))
         for name, reference in sorted(self.referenced.items()):
             paragraph = self.doc.add_paragraph()
@@ -485,12 +487,12 @@ class DocxCompiler(Compiler):
 
     def render_reference(self, ast):
         run = self.current_paragraph.add_run(ast["name"])
-        run.font.italic = True
-        if self.reference_title:
-            reference = self.referenced[ast["name"]]
-            self.current_paragraph.add_run(": ")
-            run = self.current_paragraph.add_run(reference["title"])
+        if reference := self.referenced.get(ast["name"]):
             run.font.italic = True
+            if self.reference_title:
+                self.current_paragraph.add_run(": ")
+                run = self.current_paragraph.add_run(reference["title"])
+                run.font.italic = True
 
     # https://github.com/python-openxml/python-docx/issues/610
     def add_hyperlink(self, paragraph, url, text):

@@ -84,10 +84,10 @@ def cli(inputpath, outputpath, readme, docx, pdf, epub3, html):
         raise click.UsageError(str(error))
 
     click.echo(f"{len(text)} Markdown files read.")
-    if compiler.library:
-        click.echo(f"{len(compiler.referenced)} references from '{compiler.library}'.")
+    if compiler.reflib:
+        click.echo(f"{len(compiler.referenced)} references from '{compiler.reflib}'.")
     else:
-        click.echo("No library; no references output.")
+        click.echo("No reflib defined; no references output.")
 
     if inputpath.is_dir():
         if outputpath is None:

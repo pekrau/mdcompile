@@ -57,6 +57,7 @@ class HtmlMixin:
                 self.append(f"{self.tx('Last modification')}: ")
                 self.append(utils.timeformat(self.text.modified))
         self.render(self.text.ast, level=3)
+        self.write_spacing(3)
         self.write_footnotes_text(self.text)
 
     def write_heading(self, heading, level, target=None):
@@ -176,6 +177,10 @@ class HtmlMixin:
                         if text is not texts[-1]:
                             with self.push("br"):
                                 pass
+
+    def write_spacing(self, spacing):
+        with self.push("hr", style=f"border-width: 0.2em; margin-top: {spacing}em;"):
+            pass
 
     def render_document(self, ast):
         "Render the contents of the text."
@@ -315,13 +320,16 @@ class HtmlMixin:
 
     def render_reference(self, ast):
         "Render a reference in the text."
-        with self.push("a", href=self.get_reference_href(ast)) as a:
-            a["class"] = "contrast"
+        if reference := self.referenced.get(ast["name"]):
+            with self.push("a", href=self.get_reference_href(ast)) as a:
+                a["class"] = "contrast"
+                self.append(ast["name"])
+            if self.reference_title:
+                self.append(": ")
+                with self.push("em"):
+                    self.append(reference["title"])
+        else:
             self.append(ast["name"])
-        if self.reference_title:
-            self.append(": ")
-            with self.push("em"):
-                self.append(reference["title"])
 
     def get_footnote_href(self, ast):
         "Href to the footnote definition."

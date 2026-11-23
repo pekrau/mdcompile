@@ -116,7 +116,10 @@ class HtmlCompiler(HtmlMixin, Compiler):
     def write_references(self):
         "Write the references section."
         assert self.referenced
-        self.write_spacing(6)
+        if self.text.subtexts:
+            self.write_spacing(6)
+        else:
+            self.write_spacing(3)
         with self.push("a", id="__references__"):
             self.append(" ")  # Avoid problem with non-finished element in HTML.
         title = self.tx("References")
@@ -146,10 +149,6 @@ class HtmlCompiler(HtmlMixin, Compiler):
     def write_finalize(self):
         with open(str(self.output_filepath), "w") as outfile:
             self.document.write(outfile, indent=None, decl="<!DOCTYPE html>")
-
-    def write_spacing(self, spacing):
-        with self.push("hr", style=f"border-width: 5px; margin-top: {spacing}em;"):
-            pass
 
     def render_code_block(self, ast):
         "Render a block of code. It appears that EPUB3 and HTML disagree on this."

@@ -24,6 +24,10 @@ mark {
   font-family: 'Courier New', monospace;
   background-color: white;
 }
+hr {
+    border-style: solid;
+    border-color: #e7eaf0;
+}
 pre.codeblock {
   margin-left: 3em;
 }
@@ -108,6 +112,8 @@ a.contrast {
     def write_references(self):
         "Write the references section."
         assert self.referenced
+        if not self.text.subtexts:
+            self.write_spacing(3)
         title = self.tx("References")
         if self.text.subtexts:  # Book; references in a separate section.
             self.current_section = epub3.Section(title)
