@@ -135,9 +135,10 @@ class PdfCompiler(Compiler):
         # Spacer beneath header items.
         self.flowables.append(Spacer(0, 20))
         self.render(self.text.ast, level=3)
-        self.flowables.append(
-            HRFlowable(width="100%", color="lightgrey", spaceBefore=30)
-        )
+        if self.text.footnotes:
+            self.flowables.append(
+                HRFlowable(width="100%", color="lightgrey", spaceBefore=30)
+            )
         self.write_footnotes_text(self.text)
 
     def write_toc(self):
@@ -298,7 +299,9 @@ class PdfCompiler(Compiler):
             self.push("Index")
             self.append(f'<a name="{self.get_index_id(canonical)}"/>{canonical}')
             for text in texts:
-                self.append(f"<br/>{text.ordinal_title}")
+                self.append(
+                    f'<br/><a href="#{text.identifier}">{text.ordinal_title}</a>'
+                )
             self.pop()
 
     def write_finalize(self):
