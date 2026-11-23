@@ -12,39 +12,39 @@ import utils
 
 def read_texts(directory, supertext=None, ordinal=None):
     """Read the Markdown file(s) in the given directory, and recursively in
-    any subdirectories. There must be a file 'text.md' in each directory.
+    any subdirectories. There must be a file 'text.md' in each directory,
+    although it may be empty.
     """
     directory = pathlib.Path(directory)
     text = Text(
         directory / constants.TEXT_FILENAME, supertext=supertext, ordinal=ordinal
     )
-    exclude = set(text.frontmatter.get("exclude", []))
-    exclude.add(constants.TEXT_FILENAME)
-    exclude.add(constants.README_FILENAME)
     try:
         include = [directory / p for p in text.frontmatter["include"]]
     except KeyError:
         include = sorted(directory.iterdir())
-        include = [
-            p for p in include if not (p.name.startswith(".") or p.name in exclude)
-        ]
-    ordinal = 0
-    for path in include:
+        exclude = set(text.frontmatter.get("exclude", []))
+        exclude.add(constants.TEXT_FILENAME)
+        exclude.add(constants.README_FILENAME)
+        include = [p for p in include if p.name not in exclude]
+        include = [p for p in include if not p.name.startswith(".")]
+        include = [p for p in include if (p.is_dir() or p.suffix == ".md")]
+    for ordinal, path in enumerate(include, start=1):
         if path.is_dir():
-            ordinal += 1
             read_texts(path, supertext=text, ordinal=ordinal)
         elif path.suffix == ".md":
-            ordinal += 1
             Text(path, supertext=text, ordinal=ordinal)
-        else:  # Skip other files.
-            pass
+        else:
+            raise IOError(f"file is not directory or '.md': '{path}'")
     return text
 
 
 def split_file(filepath):
     "Read the Markdown file, parse the YAML frontmatter, and return it and the text."
-    assert filepath.exists(), filepath
-    assert filepath.suffix == ".md", filepath
+    if not filepath.exists():
+        raise IOError(f"file does not exist: '{filepath}'")
+    if filepath.suffix != ".md":
+        raise IOError(f"file type is not '.md': '{filepath}'")
     content = filepath.read_text()
     match = constants.FRONTMATTER.match(content)
     if match:
@@ -61,10 +61,9 @@ class Text:
 
     def __init__(self, filepath, supertext=None, ordinal=None):
         """Read the Markdown file.
-        If the file does not exist, frontmatter and content will empty.
         Parse the YAML into frontmatter.
         Convert the Markdown text into AST.
-        Include into the supertext, if any.
+        Append as subtext to the supertext, if any.
         """
         self.filepath = pathlib.Path(filepath)
         if supertext is None:
@@ -73,11 +72,7 @@ class Text:
             self.ordinal = supertext.ordinal + (ordinal,)
             supertext.subtexts.append(self)
         self.supertext = supertext
-        if self.filepath.exists():
-            self.frontmatter, self.text = split_file(self.filepath)
-        else:
-            self.frontmatter = {}
-            self.text = ""
+        self.frontmatter, self.text = split_file(self.filepath)
         self.ast = markdown.to_ast(self.text)
         # Discard redundant item; link defs are included in-place in the AST.
         self.ast.pop("link_ref_defs", None)
