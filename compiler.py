@@ -29,11 +29,11 @@ class Compiler:
             self.footnotes_location = fm.get(
                 "footnotes-location", constants.FOOTNOTES_TEXT
             )
-            self.reference_backlinks = fm.get("reference-backlinks", True)
+            self.reference_usage = fm.get("reference-usage", True)
         # Essay; one single Markdown source file.
         else:
             self.footnotes_location = constants.FOOTNOTES_TEXT
-            self.reference_backlinks = False
+            self.reference_usage = False
 
         # Translator.
         self.tx = Tx(self.text.language)

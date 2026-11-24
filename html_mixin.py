@@ -70,7 +70,7 @@ class HtmlMixin:
         "Write out the references entries."
         assert self.referenced
         references = sorted(self.referenced.items())
-        if self.reference_backlinks:
+        if self.reference_usage:
             for name, reference in references:
                 with self.push("dl"):
                     with self.push("dt"):

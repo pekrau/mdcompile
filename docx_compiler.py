@@ -255,8 +255,7 @@ class DocxCompiler(Compiler):
                     self.add_hyperlink(paragraph, url, f"{label}:{value}")
                 except KeyError:
                     pass
-            # Backlinks to texts.
-            if self.reference_backlinks:
+            if self.reference_usage:
                 for text in reference["texts"]:
                     paragraph.add_run("\n   ")
                     paragraph.add_run(text.ordinal_title)

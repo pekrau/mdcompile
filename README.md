@@ -91,6 +91,9 @@ Markdown file for a document:
 - *reference-title*: Boolean 'true' or 'false': Whether to output the
   title of a reference when given in the text. Default: 'false'
 
+- *reference-usage*: Boolean 'true' or 'false': Whether to output
+  where a reference was used.
+
 - *paragraph-numbers*: Boolean 'true' or 'false': Whether to output
   the number of each paragraph in the document. Default: 'false'
 

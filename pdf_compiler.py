@@ -246,8 +246,7 @@ class PdfCompiler(Compiler):
                     )
                 except KeyError:
                     pass
-            # Backlinks to texts.
-            if self.reference_backlinks:
+            if self.reference_usage:
                 for text in reference["texts"]:
                     self.append("<br/>&nbsp;&nbsp;&nbsp;")
                     self.append(
