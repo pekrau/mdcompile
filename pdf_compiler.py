@@ -92,8 +92,6 @@ class PdfCompiler(Compiler):
                 name="Reference",
                 parent=self.stylesheet["Normal"],
                 spaceBefore=7,
-                leftIndent=10,
-                firstLineIndent=-10,
             )
         )
 
@@ -248,6 +246,13 @@ class PdfCompiler(Compiler):
                     )
                 except KeyError:
                     pass
+            # Backlinks to texts.
+            if self.reference_backlinks:
+                for text in reference["texts"]:
+                    self.append("<br/>&nbsp;&nbsp;&nbsp;")
+                    self.append(
+                        f'<a href="#{text.identifier}">{text.ordinal_title}</a>'
+                    )
             self.pop()
 
     def write_reference_article(self, reference):
@@ -299,9 +304,8 @@ class PdfCompiler(Compiler):
             self.push("Index")
             self.append(f'<a name="{self.get_index_id(canonical)}"/>{canonical}')
             for text in texts:
-                self.append(
-                    f'<br/><a href="#{text.identifier}">{text.ordinal_title}</a>'
-                )
+                self.append("<br/>")
+                self.append(f'<a href="#{text.identifier}">{text.ordinal_title}</a>')
             self.pop()
 
     def write_finalize(self):

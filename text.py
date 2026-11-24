@@ -175,23 +175,28 @@ class Text:
     def language(self):
         return self.frontmatter.get("language", constants.DEFAULT_LANGUAGE)
 
-    def elements(self):
-        "Return an iterator over the AST elements of this text."
-        return AstIterator(self.ast)
+    def elements(self, type=None):
+        "Return an iterator over the AST elements of this text, of a type if specified."
+        return AstIterator(self.ast, type=type)
 
 
 class AstIterator:
-    "An iterator over the AST elements."
+    "An iterator over the AST elements, of a type if specified."
 
-    def __init__(self, ast):
+    def __init__(self, ast, type):
         self.ast = ast
+        self.type = type
 
     def __iter__(self):
-        yield self.ast
+        if self.type is None:
+            yield self.ast
+        else:
+            if self.ast["element"] == self.type:
+                yield self.ast
         try:
             children = self.ast["children"]
             if isinstance(children, list):
                 for ast in children:
-                    yield from iter(AstIterator(ast))
+                    yield from iter(AstIterator(ast, type=self.type))
         except KeyError:
             pass

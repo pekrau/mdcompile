@@ -29,9 +29,11 @@ class Compiler:
             self.footnotes_location = fm.get(
                 "footnotes-location", constants.FOOTNOTES_TEXT
             )
+            self.reference_backlinks = fm.get("reference-backlinks", True)
         # Essay; one single Markdown source file.
         else:
             self.footnotes_location = constants.FOOTNOTES_TEXT
+            self.reference_backlinks = False
 
         # Translator.
         self.tx = Tx(self.text.language)
@@ -41,18 +43,23 @@ class Compiler:
         if not (path := self.text.frontmatter.get("reflib")):
             path = os.environ.get("REFLIB_DIR")
         if path:
-            missing = set()
             self.reflib = RefLib(path)
+            missing = set()
             for text in self.text:
-                for element in text.elements():
-                    if element["element"] != "reference":
-                        continue
+                for element in text.elements("reference"):
                     name = element["name"]
-                    if name not in self.referenced:
-                        try:
-                            self.referenced[name] = self.reflib[name]
-                        except KeyError:
-                            missing.add(name)
+                    try:
+                        reference = self.reflib[name]
+                    except KeyError:
+                        missing.add(name)
+                    else:
+                        # Ignore multiple use of the same reference in a text.
+                        texts = reference.setdefault("texts", [])
+                        if text in texts:
+                            element["multiple"] = True
+                        else:
+                            texts.append(text)
+                        self.referenced[name] = reference
             if missing:
                 raise ValueError(f"Missing references: {', '.join(sorted(missing))}")
         else:
@@ -62,14 +69,13 @@ class Compiler:
         if self.text.subtexts:
             self.index_terms = {}
             for text in self.text:
-                for element in text.elements():
-                    if element["element"] == "indexed":
-                        texts = self.index_terms.setdefault(element["canonical"], [])
-                        # Disallow multiple indexing of the same term in a text.
-                        if text in texts:
-                            element["multiple"] = True
-                        else:
-                            texts.append(text)
+                for element in text.elements("indexed"):
+                    texts = self.index_terms.setdefault(element["canonical"], [])
+                    # Ignore multiple indexing of the same term in a text.
+                    if text in texts:
+                        element["multiple"] = True
+                    else:
+                        texts.append(text)
         else:  # No index for essay.
             self.index_terms = None
         # Transfer footnotes to the appropriate texts, and number them.
@@ -77,28 +83,26 @@ class Compiler:
             case constants.FOOTNOTES_TEXT:
                 for text in self.text:
                     number = 0
-                    for element in text.elements():
-                        if element["element"] == "footnote_ref":
-                            element["number"] = str(number := number + 1)
-                            element["text"] = text
-                            identifier = f"{text.identifier}-footnote-{number}"
-                            element["identifier"] = identifier
-                            footnote = text.footnotes[element["label"]]
-                            footnote["number"] = number
-                            footnote["identifier"] = identifier
+                    for element in text.elements("footnote_ref"):
+                        element["number"] = str(number := number + 1)
+                        element["text"] = text
+                        identifier = f"{text.identifier}-footnote-{number}"
+                        element["identifier"] = identifier
+                        footnote = text.footnotes[element["label"]]
+                        footnote["number"] = number
+                        footnote["identifier"] = identifier
             case constants.FOOTNOTES_CHAPTER:
                 for chapter in self.text.subtexts:
                     number = 0
                     for text in chapter:
-                        for element in text.elements():
-                            if element["element"] == "footnote_ref":
-                                element["number"] = str(number := number + 1)
-                                element["text"] = chapter
-                                identifier = f"{chapter.identifier}-footnote-{number}"
-                                element["identifier"] = identifier
-                                footnote = text.footnotes[element["label"]]
-                                footnote["number"] = number
-                                footnote["identifier"] = identifier
+                        for element in text.elements("footnote_ref"):
+                            element["number"] = str(number := number + 1)
+                            element["text"] = chapter
+                            identifier = f"{chapter.identifier}-footnote-{number}"
+                            element["identifier"] = identifier
+                            footnote = text.footnotes[element["label"]]
+                            footnote["number"] = number
+                            footnote["identifier"] = identifier
                         if text is not chapter:
                             labels = set(chapter.footnotes.keys()).intersection(
                                 text.footnotes.keys()
@@ -112,15 +116,14 @@ class Compiler:
             case constants.FOOTNOTES_BOOK:
                 number = 0
                 for text in self.text:
-                    for element in text.elements():
-                        if element["element"] == "footnote_ref":
-                            element["number"] = str(number := number + 1)
-                            element["text"] = self.text
-                            identifier = f"{self.text.identifier}-footnote-{number}"
-                            element["identifier"] = identifier
-                            footnote = text.footnotes[element["label"]]
-                            footnote["number"] = number
-                            footnote["identifier"] = identifier
+                    for element in text.elements("footnote_ref"):
+                        element["number"] = str(number := number + 1)
+                        element["text"] = self.text
+                        identifier = f"{self.text.identifier}-footnote-{number}"
+                        element["identifier"] = identifier
+                        footnote = text.footnotes[element["label"]]
+                        footnote["number"] = number
+                        footnote["identifier"] = identifier
                     if text is not self.text:
                         labels = set(self.text.footnotes.keys()).intersection(
                             text.footnotes.keys()

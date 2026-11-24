@@ -162,12 +162,20 @@ class HtmlCompiler(HtmlMixin, Compiler):
         "Href to the footnote definition in HTML format."
         return f"#{ast['identifier']}"
 
+    def get_ref_id(self, name):
+        "Id for the reference in the text."
+        return f"__ref__{self.get_reference_id(name)}"
+
+    def get_ref_href(self, name, text):
+        "Href to the reference in the text."
+        return f"#{self.get_ref_id(name)}"
+
     def get_reference_id(self, name):
-        "Id for the reference in HTML format."
+        "Id for the reference."
         return f"__reference__{utils.safe(name)}"
 
     def get_reference_href(self, ast):
-        "Href to the reference in HTML format."
+        "Href to the reference."
         return f"#{self.get_reference_id(ast['name'])}"
 
     def get_index_id(self, canonical):

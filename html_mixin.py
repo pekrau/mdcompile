@@ -69,48 +69,68 @@ class HtmlMixin:
     def write_references_entries(self):
         "Write out the references entries."
         assert self.referenced
-        for name, reference in sorted(self.referenced.items()):
-            with self.push("p"):
-                with self.push("a", id=self.get_reference_id(name)):
-                    self.append(" ")  # Avoid problem with non-finished element in HTML.
-                # Authors.
-                count = len(reference["authors"])
-                for pos, author in enumerate(reference["authors"]):
-                    if pos > 0:
-                        if pos == count - 1:
-                            self.append(" & ")
-                        else:
-                            self.append(", ")
-                    self.append(author)
-                self.append(". ")
-                # Original publication year.
-                self.append(reference["year"])
-                self.append(". ")
-                # Title and bibliographic data according to publication type.
-                try:
-                    method = getattr(self, f"write_reference_{reference['type']}")
-                except AttributeError:
-                    raise ValueError(f"unknown reference type {reference['type']}")
-                else:
-                    method(reference)
-                # External link.
-                if url := reference.get("url"):
-                    self.append(" ")
-                    with self.push("a", href=url):
-                        self.append(url)
-                # Cross-references to other databases.
-                for key, (label, template) in constants.EXTERNAL_LINKS.items():
-                    try:
-                        value = reference[key]
-                    except KeyError:
-                        pass
-                    else:
-                        self.append(" ")
-                        with self.push("a", href=template.format(value=value)):
-                            self.append(f"{label}:{value}")
+        references = sorted(self.referenced.items())
+        if self.reference_backlinks:
+            for name, reference in references:
+                with self.push("dl"):
+                    with self.push("dt"):
+                        self.write_reference_entry(name, reference)
+                    with self.push("dd"):
+                        for text in reference["texts"]:
+                            with self.push("a") as a:
+                                a["href"] = self.get_ref_href(name, text)
+                                a["class"] = "contrast"
+                                a.append(text.ordinal_title)
+                            if text is not reference["texts"][-1]:
+                                with self.push("br"):
+                                    pass
+        else:
+            for name, reference in references:
+                with self.push("p"):
+                    self.write_reference_entry(name, reference)
 
-    def write_reference_article(self, reference):
-        "Write data for reference of type 'article'."
+    def write_reference_entry(self, name, reference):
+        "Write out a single reference entry."
+        with self.push("a", id=self.get_reference_id(name)):
+            self.append(" ")  # Avoid problem with non-finished element in HTML.
+        # Authors.
+        count = len(reference["authors"])
+        for pos, author in enumerate(reference["authors"]):
+            if pos > 0:
+                if pos == count - 1:
+                    self.append(" & ")
+                else:
+                    self.append(", ")
+            self.append(author)
+        self.append(". ")
+        # Original publication year.
+        self.append(reference["year"])
+        self.append(". ")
+        # Title and bibliographic data according to publication type.
+        try:
+            method = getattr(self, f"write_reference_entry_{reference['type']}")
+        except AttributeError:
+            raise ValueError(f"unknown reference type {reference['type']}")
+        else:
+            method(reference)
+        # External link.
+        if url := reference.get("url"):
+            self.append(" ")
+            with self.push("a", href=url):
+                self.append(url)
+        # Cross-references to other databases.
+        for key, (label, template) in constants.EXTERNAL_LINKS.items():
+            try:
+                value = reference[key]
+            except KeyError:
+                pass
+            else:
+                self.append(" ")
+                with self.push("a", href=template.format(value=value)):
+                    self.append(f"{label}:{value}")
+
+    def write_reference_entry_article(self, reference):
+        "Write title and bibliographic data for reference of type 'article'."
         self.append(reference["title"].rstrip("."))
         self.append(".")
         if journal := reference.get("journal"):
@@ -127,8 +147,8 @@ class HtmlMixin:
             self.append(f', {pages.replace("--", "-")}')
         self.append(".")
 
-    def write_reference_book(self, reference):
-        "Write data for reference of type 'book'."
+    def write_reference_entry_book(self, reference):
+        "Write title and bibliographic data for reference of type 'book'."
         with self.push("em"):
             self.append(reference["title"].rstrip("."))
             self.append(".")
@@ -142,8 +162,8 @@ class HtmlMixin:
                 self.append(published)
         self.append(".")
 
-    def write_reference_post(self, reference):
-        "Write data for reference of type 'post'."
+    def write_reference_entry_post(self, reference):
+        "Write title and bibliographic data for reference of type 'post'."
         self.append(reference["title"].rstrip("."))
         self.append(".")
         if published := reference.get("published"):
@@ -160,19 +180,17 @@ class HtmlMixin:
         assert self.text.subtexts
         assert self.index_terms
         items = sorted(self.index_terms.items(), key=lambda i: i[0].casefold())
-        for canonical, texts in items:
-            with self.push("dl"):
+        with self.push("dl"):
+            for canonical, texts in items:
                 with self.push("dt"):
                     with self.push("a", id=self.get_index_id(canonical)):
-                        self.append(
-                            " "
-                        )  # Avoid problem with non-finished element in HTML.
+                        # Avoid problem with non-finished element in HTML.
+                        self.append(" ")
                     self.append(canonical)
                 with self.push("dd"):
                     for text in texts:
-                        with self.push(
-                            "a", href=self.get_indexed_href(text, canonical)
-                        ) as a:
+                        with self.push("a") as a:
+                            a["href"] = href = self.get_indexed_href(text, canonical)
                             a["class"] = "contrast"
                             a.append(text.ordinal_title)
                         if text is not texts[-1]:
@@ -305,16 +323,18 @@ class HtmlMixin:
 
     def render_indexed(self, ast):
         "Render an indexed word or phrase."
-        with self.push("a", href=self.get_index_href(ast["canonical"])) as a:
+        with self.push("a") as a:
+            a["href"] = self.get_index_href(ast["canonical"])
             a["class"] = "contrast"
+            self.append(ast["term"])
             if not ast.get("multiple"):
                 a["id"] = self.get_indexed_id(ast["canonical"])
-            self.append(ast["term"])
 
     def render_footnote_ref(self, ast):
         "Render a reference to a footnote."
         with self.push("sup"):
-            with self.push("a", href=self.get_footnote_href(ast)) as a:
+            with self.push("a") as a:
+                a["href"] = self.get_footnote_href(ast)
                 a["class"] = "contrast"
                 with self.push("strong"):
                     self.append(str(ast["number"]))
@@ -322,9 +342,12 @@ class HtmlMixin:
     def render_reference(self, ast):
         "Render a reference in the text."
         if reference := self.referenced.get(ast["name"]):
-            with self.push("a", href=self.get_reference_href(ast)) as a:
+            with self.push("a") as a:
+                a["href"] = self.get_reference_href(ast)
                 a["class"] = "contrast"
                 self.append(ast["name"])
+                if not ast.get("multiple"):
+                    a["id"] = self.get_ref_id(ast["name"])
             if self.reference_title:
                 self.append(": ")
                 with self.push("em"):
@@ -334,6 +357,14 @@ class HtmlMixin:
 
     def get_footnote_href(self, ast):
         "Href to the footnote definition."
+        raise NotImplemented
+
+    def get_ref_id(self, name):
+        "Id for the reference in the text."
+        raise NotImplemented
+
+    def get_ref_href(self, name, text):
+        "Href to the reference in the text."
         raise NotImplemented
 
     def get_reference_id(self, name):

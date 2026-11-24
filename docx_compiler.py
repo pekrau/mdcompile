@@ -222,8 +222,6 @@ class DocxCompiler(Compiler):
         paragraph.add_run(self.tx("References"))
         for name, reference in sorted(self.referenced.items()):
             paragraph = self.doc.add_paragraph()
-            paragraph.paragraph_format.left_indent = docx.shared.Pt(10)
-            paragraph.paragraph_format.first_line_indent = docx.shared.Pt(-10)
             # Authors.
             count = len(reference["authors"])
             for pos, author in enumerate(reference["authors"]):
@@ -257,6 +255,11 @@ class DocxCompiler(Compiler):
                     self.add_hyperlink(paragraph, url, f"{label}:{value}")
                 except KeyError:
                     pass
+            # Backlinks to texts.
+            if self.reference_backlinks:
+                for text in reference["texts"]:
+                    paragraph.add_run("\n   ")
+                    paragraph.add_run(text.ordinal_title)
 
     def write_reference_article(self, paragraph, reference):
         paragraph.add_run(reference["title"].rstrip("."))

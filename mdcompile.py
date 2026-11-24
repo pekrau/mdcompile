@@ -109,9 +109,6 @@ def cli(inputpath, outputpath, docx, pdf, epub3, html, readme):
         except ValueError as error:
             raise click.UsageError(str(error))
 
-        if compiler.paragraph_number is not None:
-            click.echo(f"{compiler.paragraph_number} paragraphs.")
-
         if compiler.reflib:
             click.echo(
                 f"{len(compiler.referenced)} references from '{compiler.reflib}'."
@@ -135,6 +132,9 @@ def cli(inputpath, outputpath, docx, pdf, epub3, html, readme):
             click.echo("No indexing was done.")
         else:
             click.echo(f"{len(compiler.index_terms)} terms indexed.")
+
+        if compiler.paragraph_number is not None:
+            click.echo(f"{compiler.paragraph_number} paragraphs.")
 
     click.echo(f"Wrote '{filepath}'.")
     click.echo(timer)

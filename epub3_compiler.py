@@ -151,12 +151,20 @@ a.contrast {
         else:
             return f"{ast['text'].identifier}.xhtml#{ast['identifier']}"
 
+    def get_ref_id(self, name):
+        "Id for the reference in the text."
+        return f"__ref__{self.get_reference_id(name)}"
+
+    def get_ref_href(self, name, text):
+        "Href to the reference in the text."
+        return f"{text.identifier}.xhtml#{self.get_ref_id(name)}"
+
     def get_reference_id(self, name):
-        "Id for the reference in EPUB3 format."
+        "Id for the referencet."
         return utils.safe(name)
 
     def get_reference_href(self, ast):
-        "Href to the reference in EPUB3 format."
+        "Href to the reference."
         if self.text.subtexts:
             return f"{self.tx('References')}.xhtml#{self.get_reference_id(ast['name'])}"
         else:
