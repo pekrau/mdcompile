@@ -72,7 +72,7 @@ class HtmlMixin:
         references = sorted(self.referenced.items())
         if self.reference_usage:
             for name, reference in references:
-                with self.push("dl"):
+                with self.push("dl"): # Equivalent to <p> element in display, apparently.
                     with self.push("dt"):
                         self.write_reference_entry(name, reference)
                     with self.push("dd"):

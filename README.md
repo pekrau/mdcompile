@@ -68,6 +68,9 @@ format. The following entries are effective in all Markdown files:
 
 - *subtitle*: The subtitle of the document, chapter or section. Default: none.
 
+The following frontmatter entries are effective only when provided in the
+Markdown file 'text.md' in a directory:
+
 - *include*: List of all names of files and subdirectorites that are
   to be included as subsections. The order is significant.
 
@@ -75,7 +78,7 @@ format. The following entries are effective in all Markdown files:
   be ignored.
 
 The following frontmatter entries are effective only when provided in the top
-Markdown file for a document:
+Markdown file 'text.md' for a document:
 
 - *authors*: A list of strings giving the authors of the document or
    document. No default.
@@ -84,21 +87,20 @@ Markdown file for a document:
 
 - *identifier*: A unique identifier for the document.
 
-- *footnotes-location*: One of 'document', 'chapter' or 'text',
-  specifying where footnote definitions will be written. Default:
-  'text'
+- *footnotes-location*: One of 'document', 'chapter' or 'text'
+  (default): specifying where footnote definitions will be written.
 
-- *reference-title*: Boolean 'true' or 'false': Whether to output the
-  title of a reference when given in the text. Default: 'false'
+- *reference-title*: Boolean 'true' or 'false' (default): Whether to
+  write the title of a reference when given in the text.
 
-- *reference-usage*: Boolean 'true' or 'false': Whether to output
-  where a reference was used.
+- *reference-usage*: Boolean 'true' or 'false' (default): Whether to
+  write the references section where a reference was used in the text.
 
-- *paragraph-numbers*: Boolean 'true' or 'false': Whether to output
-  the number of each paragraph in the document. Default: 'false'
+- *paragraph-number*: Boolean 'true' or 'false' (default): Whether to
+  write the number of each paragraph in the text.
 
-- *library*: The path to the library directory containing references.
-  Default: environment variable LIBRARY_DIR
+- *refdir*: The path to the refdir-style references library directory.
+  Default: environment variable REFDIR_DIR
 
 - *description*: Description. Default: none.
 

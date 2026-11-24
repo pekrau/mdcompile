@@ -18,18 +18,18 @@ class Compiler:
         fm = self.text.frontmatter
         # Write out the reference title.
         self.reference_title = fm.get("reference-title", False)
-        # Write paragraph numbers.
-        if fm.get("paragraph-numbers", False):
-            self.paragraph_number = 0  # Paragraph numbers.
+        # Write paragraph number.
+        if fm.get("paragraph-number", False):
+            self.paragraph_number = 0  # Paragraph number.
         else:
-            self.paragraph_number = None  # No paragraph numbers.
+            self.paragraph_number = None  # No paragraph number.
 
         # Book; has subtexts.
         if self.text.subtexts:
             self.footnotes_location = fm.get(
                 "footnotes-location", constants.FOOTNOTES_TEXT
             )
-            self.reference_usage = fm.get("reference-usage", True)
+            self.reference_usage = fm.get("reference-usage", False)
         # Essay; one single Markdown source file.
         else:
             self.footnotes_location = constants.FOOTNOTES_TEXT
